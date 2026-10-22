@@ -1,0 +1,44 @@
+# ===== 密钥与签名（严禁提交真实值）=====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.jks
+*.keystore
+key.properties
+/app/android/key.properties
+
+# ===== 个人数据与备份（仅仓库根目录，避免误伤 app/lib/data）=====
+/data/
+/backup/
+/logs/
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.lifelog
+*.log
+
+# ===== 测试产物（测试用例与截图仅保存在本地，不入库）=====
+/testcases/
+/.verify/
+
+# ===== Flutter / Dart =====
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+/build/
+/coverage/
+*.iml
+/app/android/local.properties
+
+# ===== 构建与编辑器 =====
+.idea/
+.vscode/*
+!.vscode/extensions.json
+/app/android/.kotlin/
+/app/android/.cxx/
+.DS_Store
+Thumbs.db

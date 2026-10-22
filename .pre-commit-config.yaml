@@ -1,0 +1,11 @@
+# 提交前拦截真实凭据，避免误传到开源仓库
+# 启用：pip install pre-commit && pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: scan-secrets
+        name: scan-secrets（拦截真实密钥）
+        entry: python scripts/scan_secrets.py
+        language: system
+        pass_filenames: true
+        types: [text]
