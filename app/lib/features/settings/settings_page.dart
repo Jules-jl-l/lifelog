@@ -15,6 +15,8 @@ import '../ai/api_key_sheet.dart';
 import '../ai/assistant_name_dialog.dart';
 import '../lock/lock_state.dart';
 import 'backup_page.dart';
+import 'export_page.dart';
+import 'recycle_bin_page.dart';
 import 'theme_color_sheet.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -110,6 +112,22 @@ class SettingsPage extends ConsumerWidget {
               );
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.file_download_outlined),
+            title: const Text('导出 CSV'),
+            subtitle: const Text('流水 / 健康 / 学习数据，可直接用 Excel 打开'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const ExportPage()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('回收站'),
+            subtitle: const Text('恢复误删的流水、记录与单词'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const RecycleBinPage()),
+            ),
+          ),
           const ListTile(
             leading: Icon(Icons.storage_outlined),
             title: Text('数据存储'),
@@ -157,7 +175,7 @@ class SettingsPage extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              '朝夕册 v0.1.0 · 数据只有本机一份，请定期导出备份。',
+              '朝夕册 v0.2.0 · 数据只有本机一份，请定期导出备份。',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.outline),
             ),

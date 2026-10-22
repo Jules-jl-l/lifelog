@@ -84,6 +84,29 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _customLabelMeta = const VerificationMeta(
+    'customLabel',
+  );
+  @override
+  late final GeneratedColumn<String> customLabel = GeneratedColumn<String>(
+    'custom_label',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _marketAdjustmentMeta = const VerificationMeta(
+    'marketAdjustment',
+  );
+  @override
+  late final GeneratedColumn<int> marketAdjustment = GeneratedColumn<int>(
+    'market_adjustment',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _cardLast4Meta = const VerificationMeta(
     'cardLast4',
   );
@@ -134,6 +157,8 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     name,
     type,
     balanceInit,
+    customLabel,
+    marketAdjustment,
     cardLast4,
     cardFirst4,
     icon,
@@ -192,6 +217,24 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         balanceInit.isAcceptableOrUnknown(
           data['balance_init']!,
           _balanceInitMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_label')) {
+      context.handle(
+        _customLabelMeta,
+        customLabel.isAcceptableOrUnknown(
+          data['custom_label']!,
+          _customLabelMeta,
+        ),
+      );
+    }
+    if (data.containsKey('market_adjustment')) {
+      context.handle(
+        _marketAdjustmentMeta,
+        marketAdjustment.isAcceptableOrUnknown(
+          data['market_adjustment']!,
+          _marketAdjustmentMeta,
         ),
       );
     }
@@ -258,6 +301,14 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         DriftSqlType.int,
         data['${effectivePrefix}balance_init'],
       )!,
+      customLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_label'],
+      ),
+      marketAdjustment: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}market_adjustment'],
+      )!,
       cardLast4: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}card_last4'],
@@ -295,6 +346,12 @@ class Account extends DataClass implements Insertable<Account> {
   final AccountType type;
   final int balanceInit;
 
+  /// 自定义类型名称（仅 customAsset / customInvestment / customLiability 使用）。
+  final String? customLabel;
+
+  /// 投资类的手动市值调整（分）：市值 = 本金 + 盈亏，盈亏主要来自这里。
+  final int marketAdjustment;
+
   /// 银行卡号后四位（储蓄卡 / 信用卡必填）。只存后四位，不存完整卡号。
   final String? cardLast4;
 
@@ -310,6 +367,8 @@ class Account extends DataClass implements Insertable<Account> {
     required this.name,
     required this.type,
     required this.balanceInit,
+    this.customLabel,
+    required this.marketAdjustment,
     this.cardLast4,
     this.cardFirst4,
     this.icon,
@@ -329,6 +388,10 @@ class Account extends DataClass implements Insertable<Account> {
       map['type'] = Variable<String>($AccountsTable.$convertertype.toSql(type));
     }
     map['balance_init'] = Variable<int>(balanceInit);
+    if (!nullToAbsent || customLabel != null) {
+      map['custom_label'] = Variable<String>(customLabel);
+    }
+    map['market_adjustment'] = Variable<int>(marketAdjustment);
     if (!nullToAbsent || cardLast4 != null) {
       map['card_last4'] = Variable<String>(cardLast4);
     }
@@ -353,6 +416,10 @@ class Account extends DataClass implements Insertable<Account> {
       name: Value(name),
       type: Value(type),
       balanceInit: Value(balanceInit),
+      customLabel: customLabel == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customLabel),
+      marketAdjustment: Value(marketAdjustment),
       cardLast4: cardLast4 == null && nullToAbsent
           ? const Value.absent()
           : Value(cardLast4),
@@ -379,6 +446,8 @@ class Account extends DataClass implements Insertable<Account> {
         serializer.fromJson<String>(json['type']),
       ),
       balanceInit: serializer.fromJson<int>(json['balanceInit']),
+      customLabel: serializer.fromJson<String?>(json['customLabel']),
+      marketAdjustment: serializer.fromJson<int>(json['marketAdjustment']),
       cardLast4: serializer.fromJson<String?>(json['cardLast4']),
       cardFirst4: serializer.fromJson<String?>(json['cardFirst4']),
       icon: serializer.fromJson<String?>(json['icon']),
@@ -398,6 +467,8 @@ class Account extends DataClass implements Insertable<Account> {
         $AccountsTable.$convertertype.toJson(type),
       ),
       'balanceInit': serializer.toJson<int>(balanceInit),
+      'customLabel': serializer.toJson<String?>(customLabel),
+      'marketAdjustment': serializer.toJson<int>(marketAdjustment),
       'cardLast4': serializer.toJson<String?>(cardLast4),
       'cardFirst4': serializer.toJson<String?>(cardFirst4),
       'icon': serializer.toJson<String?>(icon),
@@ -413,6 +484,8 @@ class Account extends DataClass implements Insertable<Account> {
     String? name,
     AccountType? type,
     int? balanceInit,
+    Value<String?> customLabel = const Value.absent(),
+    int? marketAdjustment,
     Value<String?> cardLast4 = const Value.absent(),
     Value<String?> cardFirst4 = const Value.absent(),
     Value<String?> icon = const Value.absent(),
@@ -425,6 +498,8 @@ class Account extends DataClass implements Insertable<Account> {
     name: name ?? this.name,
     type: type ?? this.type,
     balanceInit: balanceInit ?? this.balanceInit,
+    customLabel: customLabel.present ? customLabel.value : this.customLabel,
+    marketAdjustment: marketAdjustment ?? this.marketAdjustment,
     cardLast4: cardLast4.present ? cardLast4.value : this.cardLast4,
     cardFirst4: cardFirst4.present ? cardFirst4.value : this.cardFirst4,
     icon: icon.present ? icon.value : this.icon,
@@ -441,6 +516,12 @@ class Account extends DataClass implements Insertable<Account> {
       balanceInit: data.balanceInit.present
           ? data.balanceInit.value
           : this.balanceInit,
+      customLabel: data.customLabel.present
+          ? data.customLabel.value
+          : this.customLabel,
+      marketAdjustment: data.marketAdjustment.present
+          ? data.marketAdjustment.value
+          : this.marketAdjustment,
       cardLast4: data.cardLast4.present ? data.cardLast4.value : this.cardLast4,
       cardFirst4: data.cardFirst4.present
           ? data.cardFirst4.value
@@ -460,6 +541,8 @@ class Account extends DataClass implements Insertable<Account> {
           ..write('name: $name, ')
           ..write('type: $type, ')
           ..write('balanceInit: $balanceInit, ')
+          ..write('customLabel: $customLabel, ')
+          ..write('marketAdjustment: $marketAdjustment, ')
           ..write('cardLast4: $cardLast4, ')
           ..write('cardFirst4: $cardFirst4, ')
           ..write('icon: $icon, ')
@@ -477,6 +560,8 @@ class Account extends DataClass implements Insertable<Account> {
     name,
     type,
     balanceInit,
+    customLabel,
+    marketAdjustment,
     cardLast4,
     cardFirst4,
     icon,
@@ -493,6 +578,8 @@ class Account extends DataClass implements Insertable<Account> {
           other.name == this.name &&
           other.type == this.type &&
           other.balanceInit == this.balanceInit &&
+          other.customLabel == this.customLabel &&
+          other.marketAdjustment == this.marketAdjustment &&
           other.cardLast4 == this.cardLast4 &&
           other.cardFirst4 == this.cardFirst4 &&
           other.icon == this.icon &&
@@ -507,6 +594,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<String> name;
   final Value<AccountType> type;
   final Value<int> balanceInit;
+  final Value<String?> customLabel;
+  final Value<int> marketAdjustment;
   final Value<String?> cardLast4;
   final Value<String?> cardFirst4;
   final Value<String?> icon;
@@ -520,6 +609,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     this.name = const Value.absent(),
     this.type = const Value.absent(),
     this.balanceInit = const Value.absent(),
+    this.customLabel = const Value.absent(),
+    this.marketAdjustment = const Value.absent(),
     this.cardLast4 = const Value.absent(),
     this.cardFirst4 = const Value.absent(),
     this.icon = const Value.absent(),
@@ -534,6 +625,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     required String name,
     required AccountType type,
     this.balanceInit = const Value.absent(),
+    this.customLabel = const Value.absent(),
+    this.marketAdjustment = const Value.absent(),
     this.cardLast4 = const Value.absent(),
     this.cardFirst4 = const Value.absent(),
     this.icon = const Value.absent(),
@@ -552,6 +645,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Expression<String>? name,
     Expression<String>? type,
     Expression<int>? balanceInit,
+    Expression<String>? customLabel,
+    Expression<int>? marketAdjustment,
     Expression<String>? cardLast4,
     Expression<String>? cardFirst4,
     Expression<String>? icon,
@@ -566,6 +661,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       if (name != null) 'name': name,
       if (type != null) 'type': type,
       if (balanceInit != null) 'balance_init': balanceInit,
+      if (customLabel != null) 'custom_label': customLabel,
+      if (marketAdjustment != null) 'market_adjustment': marketAdjustment,
       if (cardLast4 != null) 'card_last4': cardLast4,
       if (cardFirst4 != null) 'card_first4': cardFirst4,
       if (icon != null) 'icon': icon,
@@ -582,6 +679,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<String>? name,
     Value<AccountType>? type,
     Value<int>? balanceInit,
+    Value<String?>? customLabel,
+    Value<int>? marketAdjustment,
     Value<String?>? cardLast4,
     Value<String?>? cardFirst4,
     Value<String?>? icon,
@@ -596,6 +695,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       name: name ?? this.name,
       type: type ?? this.type,
       balanceInit: balanceInit ?? this.balanceInit,
+      customLabel: customLabel ?? this.customLabel,
+      marketAdjustment: marketAdjustment ?? this.marketAdjustment,
       cardLast4: cardLast4 ?? this.cardLast4,
       cardFirst4: cardFirst4 ?? this.cardFirst4,
       icon: icon ?? this.icon,
@@ -630,6 +731,12 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     if (balanceInit.present) {
       map['balance_init'] = Variable<int>(balanceInit.value);
     }
+    if (customLabel.present) {
+      map['custom_label'] = Variable<String>(customLabel.value);
+    }
+    if (marketAdjustment.present) {
+      map['market_adjustment'] = Variable<int>(marketAdjustment.value);
+    }
     if (cardLast4.present) {
       map['card_last4'] = Variable<String>(cardLast4.value);
     }
@@ -658,6 +765,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
           ..write('name: $name, ')
           ..write('type: $type, ')
           ..write('balanceInit: $balanceInit, ')
+          ..write('customLabel: $customLabel, ')
+          ..write('marketAdjustment: $marketAdjustment, ')
           ..write('cardLast4: $cardLast4, ')
           ..write('cardFirst4: $cardFirst4, ')
           ..write('icon: $icon, ')
@@ -1289,6 +1398,17 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _toAccountIdMeta = const VerificationMeta(
+    'toAccountId',
+  );
+  @override
+  late final GeneratedColumn<String> toAccountId = GeneratedColumn<String>(
+    'to_account_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _categoryIdMeta = const VerificationMeta(
     'categoryId',
   );
@@ -1408,6 +1528,7 @@ class $TransactionsTable extends Transactions
     updatedAt,
     deletedAt,
     accountId,
+    toAccountId,
     categoryId,
     kind,
     amount,
@@ -1463,6 +1584,15 @@ class $TransactionsTable extends Transactions
       context.handle(
         _accountIdMeta,
         accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    }
+    if (data.containsKey('to_account_id')) {
+      context.handle(
+        _toAccountIdMeta,
+        toAccountId.isAcceptableOrUnknown(
+          data['to_account_id']!,
+          _toAccountIdMeta,
+        ),
       );
     }
     if (data.containsKey('category_id')) {
@@ -1555,6 +1685,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}account_id'],
       ),
+      toAccountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}to_account_id'],
+      ),
       categoryId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}category_id'],
@@ -1623,6 +1757,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final String? accountId;
+
+  /// 转账的转入账户；普通收支为空。
+  final String? toAccountId;
   final String? categoryId;
   final TxnKind kind;
   final int amount;
@@ -1640,6 +1777,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.updatedAt,
     this.deletedAt,
     this.accountId,
+    this.toAccountId,
     this.categoryId,
     required this.kind,
     required this.amount,
@@ -1663,6 +1801,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     if (!nullToAbsent || accountId != null) {
       map['account_id'] = Variable<String>(accountId);
+    }
+    if (!nullToAbsent || toAccountId != null) {
+      map['to_account_id'] = Variable<String>(toAccountId);
     }
     if (!nullToAbsent || categoryId != null) {
       map['category_id'] = Variable<String>(categoryId);
@@ -1711,6 +1852,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       accountId: accountId == null && nullToAbsent
           ? const Value.absent()
           : Value(accountId),
+      toAccountId: toAccountId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(toAccountId),
       categoryId: categoryId == null && nullToAbsent
           ? const Value.absent()
           : Value(categoryId),
@@ -1748,6 +1892,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
       accountId: serializer.fromJson<String?>(json['accountId']),
+      toAccountId: serializer.fromJson<String?>(json['toAccountId']),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
       kind: $TransactionsTable.$converterkind.fromJson(
         serializer.fromJson<String>(json['kind']),
@@ -1774,6 +1919,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
       'accountId': serializer.toJson<String?>(accountId),
+      'toAccountId': serializer.toJson<String?>(toAccountId),
       'categoryId': serializer.toJson<String?>(categoryId),
       'kind': serializer.toJson<String>(
         $TransactionsTable.$converterkind.toJson(kind),
@@ -1798,6 +1944,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
     Value<String?> accountId = const Value.absent(),
+    Value<String?> toAccountId = const Value.absent(),
     Value<String?> categoryId = const Value.absent(),
     TxnKind? kind,
     int? amount,
@@ -1815,6 +1962,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
     accountId: accountId.present ? accountId.value : this.accountId,
+    toAccountId: toAccountId.present ? toAccountId.value : this.toAccountId,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
     kind: kind ?? this.kind,
     amount: amount ?? this.amount,
@@ -1834,6 +1982,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
       accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      toAccountId: data.toAccountId.present
+          ? data.toAccountId.value
+          : this.toAccountId,
       categoryId: data.categoryId.present
           ? data.categoryId.value
           : this.categoryId,
@@ -1864,6 +2015,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
           ..write('accountId: $accountId, ')
+          ..write('toAccountId: $toAccountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('kind: $kind, ')
           ..write('amount: $amount, ')
@@ -1886,6 +2038,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     updatedAt,
     deletedAt,
     accountId,
+    toAccountId,
     categoryId,
     kind,
     amount,
@@ -1907,6 +2060,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt &&
           other.accountId == this.accountId &&
+          other.toAccountId == this.toAccountId &&
           other.categoryId == this.categoryId &&
           other.kind == this.kind &&
           other.amount == this.amount &&
@@ -1926,6 +2080,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
   final Value<String?> accountId;
+  final Value<String?> toAccountId;
   final Value<String?> categoryId;
   final Value<TxnKind> kind;
   final Value<int> amount;
@@ -1944,6 +2099,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.accountId = const Value.absent(),
+    this.toAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.kind = const Value.absent(),
     this.amount = const Value.absent(),
@@ -1963,6 +2119,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     required DateTime updatedAt,
     this.deletedAt = const Value.absent(),
     this.accountId = const Value.absent(),
+    this.toAccountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     required TxnKind kind,
     required int amount,
@@ -1987,6 +2144,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
     Expression<String>? accountId,
+    Expression<String>? toAccountId,
     Expression<String>? categoryId,
     Expression<String>? kind,
     Expression<int>? amount,
@@ -2006,6 +2164,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (accountId != null) 'account_id': accountId,
+      if (toAccountId != null) 'to_account_id': toAccountId,
       if (categoryId != null) 'category_id': categoryId,
       if (kind != null) 'kind': kind,
       if (amount != null) 'amount': amount,
@@ -2027,6 +2186,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
     Value<String?>? accountId,
+    Value<String?>? toAccountId,
     Value<String?>? categoryId,
     Value<TxnKind>? kind,
     Value<int>? amount,
@@ -2046,6 +2206,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       accountId: accountId ?? this.accountId,
+      toAccountId: toAccountId ?? this.toAccountId,
       categoryId: categoryId ?? this.categoryId,
       kind: kind ?? this.kind,
       amount: amount ?? this.amount,
@@ -2078,6 +2239,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (accountId.present) {
       map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (toAccountId.present) {
+      map['to_account_id'] = Variable<String>(toAccountId.value);
     }
     if (categoryId.present) {
       map['category_id'] = Variable<String>(categoryId.value);
@@ -2130,6 +2294,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
           ..write('accountId: $accountId, ')
+          ..write('toAccountId: $toAccountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('kind: $kind, ')
           ..write('amount: $amount, ')
@@ -7414,6 +7579,1127 @@ class StudyStatsCompanion extends UpdateCompanion<StudyStat> {
   }
 }
 
+class $QuizSessionsTable extends QuizSessions
+    with TableInfo<$QuizSessionsTable, QuizSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $QuizSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _wordbookIdMeta = const VerificationMeta(
+    'wordbookId',
+  );
+  @override
+  late final GeneratedColumn<String> wordbookId = GeneratedColumn<String>(
+    'wordbook_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _totalMeta = const VerificationMeta('total');
+  @override
+  late final GeneratedColumn<int> total = GeneratedColumn<int>(
+    'total',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _correctMeta = const VerificationMeta(
+    'correct',
+  );
+  @override
+  late final GeneratedColumn<int> correct = GeneratedColumn<int>(
+    'correct',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _durationSecMeta = const VerificationMeta(
+    'durationSec',
+  );
+  @override
+  late final GeneratedColumn<int> durationSec = GeneratedColumn<int>(
+    'duration_sec',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    wordbookId,
+    mode,
+    total,
+    correct,
+    durationSec,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'quiz_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<QuizSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('wordbook_id')) {
+      context.handle(
+        _wordbookIdMeta,
+        wordbookId.isAcceptableOrUnknown(data['wordbook_id']!, _wordbookIdMeta),
+      );
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modeMeta);
+    }
+    if (data.containsKey('total')) {
+      context.handle(
+        _totalMeta,
+        total.isAcceptableOrUnknown(data['total']!, _totalMeta),
+      );
+    }
+    if (data.containsKey('correct')) {
+      context.handle(
+        _correctMeta,
+        correct.isAcceptableOrUnknown(data['correct']!, _correctMeta),
+      );
+    }
+    if (data.containsKey('duration_sec')) {
+      context.handle(
+        _durationSecMeta,
+        durationSec.isAcceptableOrUnknown(
+          data['duration_sec']!,
+          _durationSecMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  QuizSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return QuizSession(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      wordbookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wordbook_id'],
+      ),
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
+      )!,
+      total: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total'],
+      )!,
+      correct: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}correct'],
+      )!,
+      durationSec: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_sec'],
+      )!,
+    );
+  }
+
+  @override
+  $QuizSessionsTable createAlias(String alias) {
+    return $QuizSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class QuizSession extends DataClass implements Insertable<QuizSession> {
+  final String id;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+
+  /// 为空表示跨词库抽题（当前版本总是具体词库）。
+  final String? wordbookId;
+  final String mode;
+  final int total;
+  final int correct;
+  final int durationSec;
+  const QuizSession({
+    required this.id,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    this.wordbookId,
+    required this.mode,
+    required this.total,
+    required this.correct,
+    required this.durationSec,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    if (!nullToAbsent || wordbookId != null) {
+      map['wordbook_id'] = Variable<String>(wordbookId);
+    }
+    map['mode'] = Variable<String>(mode);
+    map['total'] = Variable<int>(total);
+    map['correct'] = Variable<int>(correct);
+    map['duration_sec'] = Variable<int>(durationSec);
+    return map;
+  }
+
+  QuizSessionsCompanion toCompanion(bool nullToAbsent) {
+    return QuizSessionsCompanion(
+      id: Value(id),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      wordbookId: wordbookId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wordbookId),
+      mode: Value(mode),
+      total: Value(total),
+      correct: Value(correct),
+      durationSec: Value(durationSec),
+    );
+  }
+
+  factory QuizSession.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return QuizSession(
+      id: serializer.fromJson<String>(json['id']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      wordbookId: serializer.fromJson<String?>(json['wordbookId']),
+      mode: serializer.fromJson<String>(json['mode']),
+      total: serializer.fromJson<int>(json['total']),
+      correct: serializer.fromJson<int>(json['correct']),
+      durationSec: serializer.fromJson<int>(json['durationSec']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'wordbookId': serializer.toJson<String?>(wordbookId),
+      'mode': serializer.toJson<String>(mode),
+      'total': serializer.toJson<int>(total),
+      'correct': serializer.toJson<int>(correct),
+      'durationSec': serializer.toJson<int>(durationSec),
+    };
+  }
+
+  QuizSession copyWith({
+    String? id,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    Value<String?> wordbookId = const Value.absent(),
+    String? mode,
+    int? total,
+    int? correct,
+    int? durationSec,
+  }) => QuizSession(
+    id: id ?? this.id,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    wordbookId: wordbookId.present ? wordbookId.value : this.wordbookId,
+    mode: mode ?? this.mode,
+    total: total ?? this.total,
+    correct: correct ?? this.correct,
+    durationSec: durationSec ?? this.durationSec,
+  );
+  QuizSession copyWithCompanion(QuizSessionsCompanion data) {
+    return QuizSession(
+      id: data.id.present ? data.id.value : this.id,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      wordbookId: data.wordbookId.present
+          ? data.wordbookId.value
+          : this.wordbookId,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      total: data.total.present ? data.total.value : this.total,
+      correct: data.correct.present ? data.correct.value : this.correct,
+      durationSec: data.durationSec.present
+          ? data.durationSec.value
+          : this.durationSec,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('QuizSession(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('wordbookId: $wordbookId, ')
+          ..write('mode: $mode, ')
+          ..write('total: $total, ')
+          ..write('correct: $correct, ')
+          ..write('durationSec: $durationSec')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    wordbookId,
+    mode,
+    total,
+    correct,
+    durationSec,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is QuizSession &&
+          other.id == this.id &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.wordbookId == this.wordbookId &&
+          other.mode == this.mode &&
+          other.total == this.total &&
+          other.correct == this.correct &&
+          other.durationSec == this.durationSec);
+}
+
+class QuizSessionsCompanion extends UpdateCompanion<QuizSession> {
+  final Value<String> id;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String?> wordbookId;
+  final Value<String> mode;
+  final Value<int> total;
+  final Value<int> correct;
+  final Value<int> durationSec;
+  final Value<int> rowid;
+  const QuizSessionsCompanion({
+    this.id = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.wordbookId = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.total = const Value.absent(),
+    this.correct = const Value.absent(),
+    this.durationSec = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  QuizSessionsCompanion.insert({
+    required String id,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.wordbookId = const Value.absent(),
+    required String mode,
+    this.total = const Value.absent(),
+    this.correct = const Value.absent(),
+    this.durationSec = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       mode = Value(mode);
+  static Insertable<QuizSession> custom({
+    Expression<String>? id,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? wordbookId,
+    Expression<String>? mode,
+    Expression<int>? total,
+    Expression<int>? correct,
+    Expression<int>? durationSec,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (wordbookId != null) 'wordbook_id': wordbookId,
+      if (mode != null) 'mode': mode,
+      if (total != null) 'total': total,
+      if (correct != null) 'correct': correct,
+      if (durationSec != null) 'duration_sec': durationSec,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  QuizSessionsCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String?>? wordbookId,
+    Value<String>? mode,
+    Value<int>? total,
+    Value<int>? correct,
+    Value<int>? durationSec,
+    Value<int>? rowid,
+  }) {
+    return QuizSessionsCompanion(
+      id: id ?? this.id,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      wordbookId: wordbookId ?? this.wordbookId,
+      mode: mode ?? this.mode,
+      total: total ?? this.total,
+      correct: correct ?? this.correct,
+      durationSec: durationSec ?? this.durationSec,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (wordbookId.present) {
+      map['wordbook_id'] = Variable<String>(wordbookId.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
+    }
+    if (total.present) {
+      map['total'] = Variable<int>(total.value);
+    }
+    if (correct.present) {
+      map['correct'] = Variable<int>(correct.value);
+    }
+    if (durationSec.present) {
+      map['duration_sec'] = Variable<int>(durationSec.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('QuizSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('wordbookId: $wordbookId, ')
+          ..write('mode: $mode, ')
+          ..write('total: $total, ')
+          ..write('correct: $correct, ')
+          ..write('durationSec: $durationSec, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $QuizAnswersTable extends QuizAnswers
+    with TableInfo<$QuizAnswersTable, QuizAnswer> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $QuizAnswersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wordIdMeta = const VerificationMeta('wordId');
+  @override
+  late final GeneratedColumn<String> wordId = GeneratedColumn<String>(
+    'word_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _answerMeta = const VerificationMeta('answer');
+  @override
+  late final GeneratedColumn<String> answer = GeneratedColumn<String>(
+    'answer',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _correctMeta = const VerificationMeta(
+    'correct',
+  );
+  @override
+  late final GeneratedColumn<bool> correct = GeneratedColumn<bool>(
+    'correct',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("correct" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _answeredAtMeta = const VerificationMeta(
+    'answeredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> answeredAt = GeneratedColumn<DateTime>(
+    'answered_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    sessionId,
+    wordId,
+    answer,
+    correct,
+    answeredAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'quiz_answers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<QuizAnswer> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('word_id')) {
+      context.handle(
+        _wordIdMeta,
+        wordId.isAcceptableOrUnknown(data['word_id']!, _wordIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_wordIdMeta);
+    }
+    if (data.containsKey('answer')) {
+      context.handle(
+        _answerMeta,
+        answer.isAcceptableOrUnknown(data['answer']!, _answerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_answerMeta);
+    }
+    if (data.containsKey('correct')) {
+      context.handle(
+        _correctMeta,
+        correct.isAcceptableOrUnknown(data['correct']!, _correctMeta),
+      );
+    }
+    if (data.containsKey('answered_at')) {
+      context.handle(
+        _answeredAtMeta,
+        answeredAt.isAcceptableOrUnknown(data['answered_at']!, _answeredAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_answeredAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  QuizAnswer map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return QuizAnswer(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      )!,
+      wordId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}word_id'],
+      )!,
+      answer: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}answer'],
+      )!,
+      correct: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}correct'],
+      )!,
+      answeredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}answered_at'],
+      )!,
+    );
+  }
+
+  @override
+  $QuizAnswersTable createAlias(String alias) {
+    return $QuizAnswersTable(attachedDatabase, alias);
+  }
+}
+
+class QuizAnswer extends DataClass implements Insertable<QuizAnswer> {
+  final String id;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final String sessionId;
+  final String wordId;
+  final String answer;
+  final bool correct;
+  final DateTime answeredAt;
+  const QuizAnswer({
+    required this.id,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.sessionId,
+    required this.wordId,
+    required this.answer,
+    required this.correct,
+    required this.answeredAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    map['session_id'] = Variable<String>(sessionId);
+    map['word_id'] = Variable<String>(wordId);
+    map['answer'] = Variable<String>(answer);
+    map['correct'] = Variable<bool>(correct);
+    map['answered_at'] = Variable<DateTime>(answeredAt);
+    return map;
+  }
+
+  QuizAnswersCompanion toCompanion(bool nullToAbsent) {
+    return QuizAnswersCompanion(
+      id: Value(id),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      sessionId: Value(sessionId),
+      wordId: Value(wordId),
+      answer: Value(answer),
+      correct: Value(correct),
+      answeredAt: Value(answeredAt),
+    );
+  }
+
+  factory QuizAnswer.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return QuizAnswer(
+      id: serializer.fromJson<String>(json['id']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      sessionId: serializer.fromJson<String>(json['sessionId']),
+      wordId: serializer.fromJson<String>(json['wordId']),
+      answer: serializer.fromJson<String>(json['answer']),
+      correct: serializer.fromJson<bool>(json['correct']),
+      answeredAt: serializer.fromJson<DateTime>(json['answeredAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'sessionId': serializer.toJson<String>(sessionId),
+      'wordId': serializer.toJson<String>(wordId),
+      'answer': serializer.toJson<String>(answer),
+      'correct': serializer.toJson<bool>(correct),
+      'answeredAt': serializer.toJson<DateTime>(answeredAt),
+    };
+  }
+
+  QuizAnswer copyWith({
+    String? id,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    String? sessionId,
+    String? wordId,
+    String? answer,
+    bool? correct,
+    DateTime? answeredAt,
+  }) => QuizAnswer(
+    id: id ?? this.id,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    sessionId: sessionId ?? this.sessionId,
+    wordId: wordId ?? this.wordId,
+    answer: answer ?? this.answer,
+    correct: correct ?? this.correct,
+    answeredAt: answeredAt ?? this.answeredAt,
+  );
+  QuizAnswer copyWithCompanion(QuizAnswersCompanion data) {
+    return QuizAnswer(
+      id: data.id.present ? data.id.value : this.id,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      wordId: data.wordId.present ? data.wordId.value : this.wordId,
+      answer: data.answer.present ? data.answer.value : this.answer,
+      correct: data.correct.present ? data.correct.value : this.correct,
+      answeredAt: data.answeredAt.present
+          ? data.answeredAt.value
+          : this.answeredAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('QuizAnswer(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('wordId: $wordId, ')
+          ..write('answer: $answer, ')
+          ..write('correct: $correct, ')
+          ..write('answeredAt: $answeredAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    sessionId,
+    wordId,
+    answer,
+    correct,
+    answeredAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is QuizAnswer &&
+          other.id == this.id &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt &&
+          other.sessionId == this.sessionId &&
+          other.wordId == this.wordId &&
+          other.answer == this.answer &&
+          other.correct == this.correct &&
+          other.answeredAt == this.answeredAt);
+}
+
+class QuizAnswersCompanion extends UpdateCompanion<QuizAnswer> {
+  final Value<String> id;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<String> sessionId;
+  final Value<String> wordId;
+  final Value<String> answer;
+  final Value<bool> correct;
+  final Value<DateTime> answeredAt;
+  final Value<int> rowid;
+  const QuizAnswersCompanion({
+    this.id = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.wordId = const Value.absent(),
+    this.answer = const Value.absent(),
+    this.correct = const Value.absent(),
+    this.answeredAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  QuizAnswersCompanion.insert({
+    required String id,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    required String sessionId,
+    required String wordId,
+    required String answer,
+    this.correct = const Value.absent(),
+    required DateTime answeredAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       sessionId = Value(sessionId),
+       wordId = Value(wordId),
+       answer = Value(answer),
+       answeredAt = Value(answeredAt);
+  static Insertable<QuizAnswer> custom({
+    Expression<String>? id,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? sessionId,
+    Expression<String>? wordId,
+    Expression<String>? answer,
+    Expression<bool>? correct,
+    Expression<DateTime>? answeredAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (sessionId != null) 'session_id': sessionId,
+      if (wordId != null) 'word_id': wordId,
+      if (answer != null) 'answer': answer,
+      if (correct != null) 'correct': correct,
+      if (answeredAt != null) 'answered_at': answeredAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  QuizAnswersCompanion copyWith({
+    Value<String>? id,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<String>? sessionId,
+    Value<String>? wordId,
+    Value<String>? answer,
+    Value<bool>? correct,
+    Value<DateTime>? answeredAt,
+    Value<int>? rowid,
+  }) {
+    return QuizAnswersCompanion(
+      id: id ?? this.id,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      sessionId: sessionId ?? this.sessionId,
+      wordId: wordId ?? this.wordId,
+      answer: answer ?? this.answer,
+      correct: correct ?? this.correct,
+      answeredAt: answeredAt ?? this.answeredAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (wordId.present) {
+      map['word_id'] = Variable<String>(wordId.value);
+    }
+    if (answer.present) {
+      map['answer'] = Variable<String>(answer.value);
+    }
+    if (correct.present) {
+      map['correct'] = Variable<bool>(correct.value);
+    }
+    if (answeredAt.present) {
+      map['answered_at'] = Variable<DateTime>(answeredAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('QuizAnswersCompanion(')
+          ..write('id: $id, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('wordId: $wordId, ')
+          ..write('answer: $answer, ')
+          ..write('correct: $correct, ')
+          ..write('answeredAt: $answeredAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $ChatSessionsTable extends ChatSessions
     with TableInfo<$ChatSessionsTable, ChatSession> {
   @override
@@ -9795,6 +11081,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $WordsTable words = $WordsTable(this);
   late final $ReviewRecordsTable reviewRecords = $ReviewRecordsTable(this);
   late final $StudyStatsTable studyStats = $StudyStatsTable(this);
+  late final $QuizSessionsTable quizSessions = $QuizSessionsTable(this);
+  late final $QuizAnswersTable quizAnswers = $QuizAnswersTable(this);
   late final $ChatSessionsTable chatSessions = $ChatSessionsTable(this);
   late final $ChatMessagesTable chatMessages = $ChatMessagesTable(this);
   late final $AiToolCallsTable aiToolCalls = $AiToolCallsTable(this);
@@ -9817,6 +11105,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     words,
     reviewRecords,
     studyStats,
+    quizSessions,
+    quizAnswers,
     chatSessions,
     chatMessages,
     aiToolCalls,
@@ -9833,6 +11123,8 @@ typedef $$AccountsTableCreateCompanionBuilder = AccountsCompanion Function({
   required String name,
   required AccountType type,
   Value<int> balanceInit,
+  Value<String?> customLabel,
+  Value<int> marketAdjustment,
   Value<String?> cardLast4,
   Value<String?> cardFirst4,
   Value<String?> icon,
@@ -9847,6 +11139,8 @@ typedef $$AccountsTableUpdateCompanionBuilder = AccountsCompanion Function({
   Value<String> name,
   Value<AccountType> type,
   Value<int> balanceInit,
+  Value<String?> customLabel,
+  Value<int> marketAdjustment,
   Value<String?> cardLast4,
   Value<String?> cardFirst4,
   Value<String?> icon,
@@ -9896,6 +11190,16 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<int> get balanceInit => $composableBuilder(
     column: $table.balanceInit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customLabel => $composableBuilder(
+    column: $table.customLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get marketAdjustment => $composableBuilder(
+    column: $table.marketAdjustment,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9964,6 +11268,16 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get customLabel => $composableBuilder(
+    column: $table.customLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get marketAdjustment => $composableBuilder(
+    column: $table.marketAdjustment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get cardLast4 => $composableBuilder(
     column: $table.cardLast4,
     builder: (column) => ColumnOrderings(column),
@@ -10017,6 +11331,16 @@ class $$AccountsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get customLabel => $composableBuilder(
+    column: $table.customLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get marketAdjustment => $composableBuilder(
+    column: $table.marketAdjustment,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get cardLast4 =>
       $composableBuilder(column: $table.cardLast4, builder: (column) => column);
 
@@ -10067,6 +11391,8 @@ class $$AccountsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<AccountType> type = const Value.absent(),
                 Value<int> balanceInit = const Value.absent(),
+                Value<String?> customLabel = const Value.absent(),
+                Value<int> marketAdjustment = const Value.absent(),
                 Value<String?> cardLast4 = const Value.absent(),
                 Value<String?> cardFirst4 = const Value.absent(),
                 Value<String?> icon = const Value.absent(),
@@ -10080,6 +11406,8 @@ class $$AccountsTableTableManager
                 name: name,
                 type: type,
                 balanceInit: balanceInit,
+                customLabel: customLabel,
+                marketAdjustment: marketAdjustment,
                 cardLast4: cardLast4,
                 cardFirst4: cardFirst4,
                 icon: icon,
@@ -10095,6 +11423,8 @@ class $$AccountsTableTableManager
                 required String name,
                 required AccountType type,
                 Value<int> balanceInit = const Value.absent(),
+                Value<String?> customLabel = const Value.absent(),
+                Value<int> marketAdjustment = const Value.absent(),
                 Value<String?> cardLast4 = const Value.absent(),
                 Value<String?> cardFirst4 = const Value.absent(),
                 Value<String?> icon = const Value.absent(),
@@ -10108,6 +11438,8 @@ class $$AccountsTableTableManager
                 name: name,
                 type: type,
                 balanceInit: balanceInit,
+                customLabel: customLabel,
+                marketAdjustment: marketAdjustment,
                 cardLast4: cardLast4,
                 cardFirst4: cardFirst4,
                 icon: icon,
@@ -10430,6 +11762,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
       Value<String?> accountId,
+      Value<String?> toAccountId,
       Value<String?> categoryId,
       required TxnKind kind,
       required int amount,
@@ -10450,6 +11783,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<String?> accountId,
+      Value<String?> toAccountId,
       Value<String?> categoryId,
       Value<TxnKind> kind,
       Value<int> amount,
@@ -10495,6 +11829,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get accountId => $composableBuilder(
     column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get toAccountId => $composableBuilder(
+    column: $table.toAccountId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10590,6 +11929,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get toAccountId => $composableBuilder(
+    column: $table.toAccountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get categoryId => $composableBuilder(
     column: $table.categoryId,
     builder: (column) => ColumnOrderings(column),
@@ -10670,6 +12014,11 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get accountId =>
       $composableBuilder(column: $table.accountId, builder: (column) => column);
 
+  GeneratedColumn<String> get toAccountId => $composableBuilder(
+    column: $table.toAccountId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get categoryId => $composableBuilder(
     column: $table.categoryId,
     builder: (column) => column,
@@ -10748,6 +12097,7 @@ class $$TransactionsTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<String?> accountId = const Value.absent(),
+                Value<String?> toAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 Value<TxnKind> kind = const Value.absent(),
                 Value<int> amount = const Value.absent(),
@@ -10766,6 +12116,7 @@ class $$TransactionsTableTableManager
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 accountId: accountId,
+                toAccountId: toAccountId,
                 categoryId: categoryId,
                 kind: kind,
                 amount: amount,
@@ -10786,6 +12137,7 @@ class $$TransactionsTableTableManager
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<String?> accountId = const Value.absent(),
+                Value<String?> toAccountId = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
                 required TxnKind kind,
                 required int amount,
@@ -10804,6 +12156,7 @@ class $$TransactionsTableTableManager
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 accountId: accountId,
+                toAccountId: toAccountId,
                 categoryId: categoryId,
                 kind: kind,
                 amount: amount,
@@ -13481,6 +14834,582 @@ typedef $$StudyStatsTableProcessedTableManager =
       StudyStat,
       PrefetchHooks Function()
     >;
+typedef $$QuizSessionsTableCreateCompanionBuilder =
+    QuizSessionsCompanion Function({
+      required String id,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String?> wordbookId,
+      required String mode,
+      Value<int> total,
+      Value<int> correct,
+      Value<int> durationSec,
+      Value<int> rowid,
+    });
+typedef $$QuizSessionsTableUpdateCompanionBuilder =
+    QuizSessionsCompanion Function({
+      Value<String> id,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String?> wordbookId,
+      Value<String> mode,
+      Value<int> total,
+      Value<int> correct,
+      Value<int> durationSec,
+      Value<int> rowid,
+    });
+
+class $$QuizSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $QuizSessionsTable> {
+  $$QuizSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get wordbookId => $composableBuilder(
+    column: $table.wordbookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get total => $composableBuilder(
+    column: $table.total,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get correct => $composableBuilder(
+    column: $table.correct,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSec => $composableBuilder(
+    column: $table.durationSec,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$QuizSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $QuizSessionsTable> {
+  $$QuizSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get wordbookId => $composableBuilder(
+    column: $table.wordbookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get total => $composableBuilder(
+    column: $table.total,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get correct => $composableBuilder(
+    column: $table.correct,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationSec => $composableBuilder(
+    column: $table.durationSec,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$QuizSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $QuizSessionsTable> {
+  $$QuizSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get wordbookId => $composableBuilder(
+    column: $table.wordbookId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<int> get total =>
+      $composableBuilder(column: $table.total, builder: (column) => column);
+
+  GeneratedColumn<int> get correct =>
+      $composableBuilder(column: $table.correct, builder: (column) => column);
+
+  GeneratedColumn<int> get durationSec => $composableBuilder(
+    column: $table.durationSec,
+    builder: (column) => column,
+  );
+}
+
+class $$QuizSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $QuizSessionsTable,
+          QuizSession,
+          $$QuizSessionsTableFilterComposer,
+          $$QuizSessionsTableOrderingComposer,
+          $$QuizSessionsTableAnnotationComposer,
+          $$QuizSessionsTableCreateCompanionBuilder,
+          $$QuizSessionsTableUpdateCompanionBuilder,
+          (
+            QuizSession,
+            BaseReferences<_$AppDatabase, $QuizSessionsTable, QuizSession>,
+          ),
+          QuizSession,
+          PrefetchHooks Function()
+        > {
+  $$QuizSessionsTableTableManager(_$AppDatabase db, $QuizSessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$QuizSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$QuizSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$QuizSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> wordbookId = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<int> total = const Value.absent(),
+                Value<int> correct = const Value.absent(),
+                Value<int> durationSec = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => QuizSessionsCompanion(
+                id: id,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                wordbookId: wordbookId,
+                mode: mode,
+                total: total,
+                correct: correct,
+                durationSec: durationSec,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> wordbookId = const Value.absent(),
+                required String mode,
+                Value<int> total = const Value.absent(),
+                Value<int> correct = const Value.absent(),
+                Value<int> durationSec = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => QuizSessionsCompanion.insert(
+                id: id,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                wordbookId: wordbookId,
+                mode: mode,
+                total: total,
+                correct: correct,
+                durationSec: durationSec,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$QuizSessionsTable, QuizSession>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $QuizSessionsTable,
+                    QuizSession
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$QuizSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $QuizSessionsTable,
+      QuizSession,
+      $$QuizSessionsTableFilterComposer,
+      $$QuizSessionsTableOrderingComposer,
+      $$QuizSessionsTableAnnotationComposer,
+      $$QuizSessionsTableCreateCompanionBuilder,
+      $$QuizSessionsTableUpdateCompanionBuilder,
+      (
+        QuizSession,
+        BaseReferences<_$AppDatabase, $QuizSessionsTable, QuizSession>,
+      ),
+      QuizSession,
+      PrefetchHooks Function()
+    >;
+typedef $$QuizAnswersTableCreateCompanionBuilder =
+    QuizAnswersCompanion Function({
+      required String id,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      required String sessionId,
+      required String wordId,
+      required String answer,
+      Value<bool> correct,
+      required DateTime answeredAt,
+      Value<int> rowid,
+    });
+typedef $$QuizAnswersTableUpdateCompanionBuilder =
+    QuizAnswersCompanion Function({
+      Value<String> id,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<String> sessionId,
+      Value<String> wordId,
+      Value<String> answer,
+      Value<bool> correct,
+      Value<DateTime> answeredAt,
+      Value<int> rowid,
+    });
+
+class $$QuizAnswersTableFilterComposer
+    extends Composer<_$AppDatabase, $QuizAnswersTable> {
+  $$QuizAnswersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get wordId => $composableBuilder(
+    column: $table.wordId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get answer => $composableBuilder(
+    column: $table.answer,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get correct => $composableBuilder(
+    column: $table.correct,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get answeredAt => $composableBuilder(
+    column: $table.answeredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$QuizAnswersTableOrderingComposer
+    extends Composer<_$AppDatabase, $QuizAnswersTable> {
+  $$QuizAnswersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get wordId => $composableBuilder(
+    column: $table.wordId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get answer => $composableBuilder(
+    column: $table.answer,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get correct => $composableBuilder(
+    column: $table.correct,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get answeredAt => $composableBuilder(
+    column: $table.answeredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$QuizAnswersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $QuizAnswersTable> {
+  $$QuizAnswersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
+
+  GeneratedColumn<String> get wordId =>
+      $composableBuilder(column: $table.wordId, builder: (column) => column);
+
+  GeneratedColumn<String> get answer =>
+      $composableBuilder(column: $table.answer, builder: (column) => column);
+
+  GeneratedColumn<bool> get correct =>
+      $composableBuilder(column: $table.correct, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get answeredAt => $composableBuilder(
+    column: $table.answeredAt,
+    builder: (column) => column,
+  );
+}
+
+class $$QuizAnswersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $QuizAnswersTable,
+          QuizAnswer,
+          $$QuizAnswersTableFilterComposer,
+          $$QuizAnswersTableOrderingComposer,
+          $$QuizAnswersTableAnnotationComposer,
+          $$QuizAnswersTableCreateCompanionBuilder,
+          $$QuizAnswersTableUpdateCompanionBuilder,
+          (
+            QuizAnswer,
+            BaseReferences<_$AppDatabase, $QuizAnswersTable, QuizAnswer>,
+          ),
+          QuizAnswer,
+          PrefetchHooks Function()
+        > {
+  $$QuizAnswersTableTableManager(_$AppDatabase db, $QuizAnswersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$QuizAnswersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$QuizAnswersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$QuizAnswersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String> sessionId = const Value.absent(),
+                Value<String> wordId = const Value.absent(),
+                Value<String> answer = const Value.absent(),
+                Value<bool> correct = const Value.absent(),
+                Value<DateTime> answeredAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => QuizAnswersCompanion(
+                id: id,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                sessionId: sessionId,
+                wordId: wordId,
+                answer: answer,
+                correct: correct,
+                answeredAt: answeredAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                required String sessionId,
+                required String wordId,
+                required String answer,
+                Value<bool> correct = const Value.absent(),
+                required DateTime answeredAt,
+                Value<int> rowid = const Value.absent(),
+              }) => QuizAnswersCompanion.insert(
+                id: id,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                sessionId: sessionId,
+                wordId: wordId,
+                answer: answer,
+                correct: correct,
+                answeredAt: answeredAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$QuizAnswersTable, QuizAnswer>(table),
+                  BaseReferences<_$AppDatabase, $QuizAnswersTable, QuizAnswer>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$QuizAnswersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $QuizAnswersTable,
+      QuizAnswer,
+      $$QuizAnswersTableFilterComposer,
+      $$QuizAnswersTableOrderingComposer,
+      $$QuizAnswersTableAnnotationComposer,
+      $$QuizAnswersTableCreateCompanionBuilder,
+      $$QuizAnswersTableUpdateCompanionBuilder,
+      (
+        QuizAnswer,
+        BaseReferences<_$AppDatabase, $QuizAnswersTable, QuizAnswer>,
+      ),
+      QuizAnswer,
+      PrefetchHooks Function()
+    >;
 typedef $$ChatSessionsTableCreateCompanionBuilder =
     ChatSessionsCompanion Function({
       required String id,
@@ -14770,6 +16699,10 @@ class $AppDatabaseManager {
       $$ReviewRecordsTableTableManager(_db, _db.reviewRecords);
   $$StudyStatsTableTableManager get studyStats =>
       $$StudyStatsTableTableManager(_db, _db.studyStats);
+  $$QuizSessionsTableTableManager get quizSessions =>
+      $$QuizSessionsTableTableManager(_db, _db.quizSessions);
+  $$QuizAnswersTableTableManager get quizAnswers =>
+      $$QuizAnswersTableTableManager(_db, _db.quizAnswers);
   $$ChatSessionsTableTableManager get chatSessions =>
       $$ChatSessionsTableTableManager(_db, _db.chatSessions);
   $$ChatMessagesTableTableManager get chatMessages =>

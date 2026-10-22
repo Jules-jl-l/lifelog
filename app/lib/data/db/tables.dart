@@ -12,7 +12,35 @@ enum TxnKind { income, expense, transfer }
 
 enum TxnSource { manual, ai, ocr }
 
-enum AccountType { cash, debitCard, creditCard, wechat, alipay, investment }
+/// 账户大类：资产 / 投资 / 负债。
+enum AccountClass { asset, investment, liability }
+
+extension AccountClassLabel on AccountClass {
+  String get label => switch (this) {
+        AccountClass.asset => '资产类',
+        AccountClass.investment => '投资类',
+        AccountClass.liability => '负债类',
+      };
+}
+
+enum AccountType {
+  cash,
+  debitCard,
+  creditCard,
+  wechat,
+  alipay,
+  investment,
+  virtual,
+  receivable,
+  customAsset,
+  stock,
+  fund,
+  wealth,
+  customInvestment,
+  shortLoan,
+  longLoan,
+  customLiability,
+}
 
 extension AccountTypeLabel on AccountType {
   String get label => switch (this) {
@@ -22,8 +50,58 @@ extension AccountTypeLabel on AccountType {
         AccountType.wechat => '微信',
         AccountType.alipay => '支付宝',
         AccountType.investment => '投资账户',
+        AccountType.virtual => '虚拟账户',
+        AccountType.receivable => '债权',
+        AccountType.customAsset => '自定义资产',
+        AccountType.stock => '股票',
+        AccountType.fund => '基金',
+        AccountType.wealth => '理财产品',
+        AccountType.customInvestment => '自定义投资',
+        AccountType.shortLoan => '短期信贷',
+        AccountType.longLoan => '长期借贷',
+        AccountType.customLiability => '自定义负债',
       };
+
+  /// 所属大类：投资类在算总资产时按市值计入，负债类只计入总负债。
+  AccountClass get accountClass => switch (this) {
+        AccountType.cash ||
+        AccountType.debitCard ||
+        AccountType.wechat ||
+        AccountType.alipay ||
+        AccountType.virtual ||
+        AccountType.receivable ||
+        AccountType.customAsset =>
+          AccountClass.asset,
+        AccountType.investment ||
+        AccountType.stock ||
+        AccountType.fund ||
+        AccountType.wealth ||
+        AccountType.customInvestment =>
+          AccountClass.investment,
+        AccountType.creditCard ||
+        AccountType.shortLoan ||
+        AccountType.longLoan ||
+        AccountType.customLiability =>
+          AccountClass.liability,
+      };
+
+  /// 是否需要自定义类型名称。
+  bool get isCustom =>
+      this == AccountType.customAsset ||
+      this == AccountType.customInvestment ||
+      this == AccountType.customLiability;
+
+  /// 需要填写银行卡前后四位。
+  bool get isCardType =>
+      this == AccountType.debitCard || this == AccountType.creditCard;
+
 }
+
+/// 大类下的可选类型（新建账户时使用）。
+List<AccountType> accountTypesOf(AccountClass cls) => [
+      for (final type in AccountType.values)
+        if (type.accountClass == cls) type,
+    ];
 
 extension TxnKindLabel on TxnKind {
   String get label => switch (this) {
@@ -56,6 +134,12 @@ class Accounts extends Table with BaseColumns {
   TextColumn get type => textEnum<AccountType>()();
   IntColumn get balanceInit => integer().withDefault(const Constant(0))();
 
+  /// 自定义类型名称（仅 customAsset / customInvestment / customLiability 使用）。
+  TextColumn get customLabel => text().nullable()();
+
+  /// 投资类的手动市值调整（分）：市值 = 本金 + 盈亏，盈亏主要来自这里。
+  IntColumn get marketAdjustment => integer().withDefault(const Constant(0))();
+
   /// 银行卡号后四位（储蓄卡 / 信用卡必填）。只存后四位，不存完整卡号。
   TextColumn get cardLast4 => text().nullable()();
 
@@ -81,6 +165,9 @@ class Categories extends Table with BaseColumns {
 
 class Transactions extends Table with BaseColumns {
   TextColumn get accountId => text().nullable()();
+
+  /// 转账的转入账户；普通收支为空。
+  TextColumn get toAccountId => text().nullable()();
   TextColumn get categoryId => text().nullable()();
   TextColumn get kind => textEnum<TxnKind>()();
   IntColumn get amount => integer()();
@@ -209,6 +296,31 @@ class StudyStats extends Table with BaseColumns {
   IntColumn get reviewCount => integer().withDefault(const Constant(0))();
   RealColumn get correctRate => real().withDefault(const Constant(0))();
   IntColumn get durationSec => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 一次拼写 / 听写测验（完成一轮才写入）。
+class QuizSessions extends Table with BaseColumns {
+  /// 为空表示跨词库抽题（当前版本总是具体词库）。
+  TextColumn get wordbookId => text().nullable()();
+  TextColumn get mode => text()();
+  IntColumn get total => integer().withDefault(const Constant(0))();
+  IntColumn get correct => integer().withDefault(const Constant(0))();
+  IntColumn get durationSec => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// 测验中的每一道题，便于后续做错题本。
+class QuizAnswers extends Table with BaseColumns {
+  TextColumn get sessionId => text()();
+  TextColumn get wordId => text()();
+  TextColumn get answer => text()();
+  BoolColumn get correct => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get answeredAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};

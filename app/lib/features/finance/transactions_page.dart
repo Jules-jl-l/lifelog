@@ -132,25 +132,36 @@ class _TransactionsPageState extends ConsumerState<TransactionsPage> {
                   itemBuilder: (context, index) {
                     final row = rows[index];
                     final isIncome = row.kind == TxnKind.income;
+                    final isTransfer = row.kind == TxnKind.transfer;
+                    final toName = row.toAccountId == null
+                        ? null
+                        : (accountNames[row.toAccountId!] ?? '已删除账户');
                     return ListTile(
                       title: Text(
-                        row.payee?.isNotEmpty == true
-                            ? row.payee!
-                            : (row.categoryId == null
-                                ? '未分类'
-                                : (categoryNames[row.categoryId] ?? '已删除分类')),
+                        isTransfer
+                            ? '转账${toName == null ? '' : ' → $toName'}'
+                            : (row.payee?.isNotEmpty == true
+                                ? row.payee!
+                                : (row.categoryId == null
+                                    ? '未分类'
+                                    : (categoryNames[row.categoryId] ??
+                                        '已删除分类'))),
                       ),
                       subtitle: Text(
                         '${formatDateTime(row.occurredAt)}'
                         '${row.accountId == null ? '' : ' · ${accountNames[row.accountId] ?? '已删除账户'}'}',
                       ),
                       trailing: Text(
-                        '${isIncome ? '+' : '-'}¥${formatCents(row.amount)}',
+                        isTransfer
+                            ? '¥${formatCents(row.amount)}'
+                            : '${isIncome ? '+' : '-'}¥${formatCents(row.amount)}',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: isIncome
-                              ? const Color(0xFF05994F)
-                              : const Color(0xFFE8463A),
+                          color: isTransfer
+                              ? Theme.of(context).colorScheme.outline
+                              : isIncome
+                                  ? const Color(0xFF05994F)
+                                  : const Color(0xFFE8463A),
                         ),
                       ),
                       onTap: () =>

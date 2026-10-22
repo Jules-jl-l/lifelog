@@ -43,6 +43,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
   late DateTime _occurredAt;
   String? _categoryId;
   String? _accountId;
+  String? _toAccountId;
   bool _saving = false;
 
   @override
@@ -58,6 +59,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
     _occurredAt = existing?.occurredAt ?? DateTime.now();
     _categoryId = existing?.categoryId;
     _accountId = existing?.accountId;
+    _toAccountId = existing?.toAccountId;
   }
 
   @override
@@ -124,6 +126,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
               onSelectionChanged: (values) => setState(() {
                 _kind = values.first;
                 _categoryId = null;
+                if (_kind != TxnKind.transfer) _toAccountId = null;
               }),
             ),
             const SizedBox(height: 16),
@@ -182,7 +185,10 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
             ],
             Row(
               children: [
-                Text('账户', style: theme.textTheme.labelLarge),
+                Text(
+                  _kind == TxnKind.transfer ? '转出账户' : '账户',
+                  style: theme.textTheme.labelLarge,
+                ),
                 IconButton(
                   tooltip: '新增账户',
                   visualDensity: VisualDensity.compact,
@@ -215,6 +221,32 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
                     ),
                 ],
               ),
+            if (_kind == TxnKind.transfer) ...[
+              const SizedBox(height: 16),
+              Text('转入账户', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 8),
+              if (accounts.length < 2)
+                Text(
+                  '至少需要两个账户才能转账',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final item in accounts)
+                      ChoiceChip(
+                        label: Text(accountDisplayName(item)),
+                        selected: _toAccountId == item.id,
+                        onSelected: (_) =>
+                            setState(() => _toAccountId = item.id),
+                      ),
+                  ],
+                ),
+            ],
             const SizedBox(height: 20),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -279,6 +311,16 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
       _notify('请输入大于 0 的金额');
       return;
     }
+    if (_kind == TxnKind.transfer) {
+      if (_accountId == null || _toAccountId == null) {
+        _notify('请选择转出账户和转入账户');
+        return;
+      }
+      if (_accountId == _toAccountId) {
+        _notify('转出和转入账户不能相同');
+        return;
+      }
+    }
 
     setState(() => _saving = true);
     try {
@@ -289,6 +331,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
             occurredAt: _occurredAt,
             categoryId: _categoryId,
             accountId: _accountId,
+            toAccountId: _kind == TxnKind.transfer ? _toAccountId : null,
             payee: _payee.text.trim().isEmpty ? null : _payee.text.trim(),
             note: _note.text.trim().isEmpty ? null : _note.text.trim(),
           );

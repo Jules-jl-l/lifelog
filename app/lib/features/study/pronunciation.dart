@@ -20,6 +20,16 @@ class PronunciationService {
     _configured = true;
   }
 
+  /// 设备是否有可用的 TTS 引擎（听写模式预检）。
+  Future<bool> isAvailable() async {
+    try {
+      final languages = await _tts.getLanguages;
+      return languages is List && languages.isNotEmpty;
+    } on Object {
+      return false;
+    }
+  }
+
   /// 朗读一个单词；成功返回 null，失败返回可读的错误信息。
   ///
   /// [american] 为 false 时用英式发音（en-GB）。

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/async_x.dart';
 import '../../data/db/database.dart';
 import '../../data/providers.dart';
+import '../../data/study/quiz.dart';
 import '../../data/study_stats.dart';
 
 final wordbooksProvider = StreamProvider<List<Wordbook>>(
@@ -42,3 +43,16 @@ final dailyQueueProvider = Provider<List<CardState>>((ref) {
     now: DateTime.now(),
   );
 });
+
+/// 最近 5 次测验成绩。
+final recentQuizSessionsProvider = StreamProvider<List<QuizSessionEntry>>(
+  (ref) => ref.watch(studyRepositoryProvider).watchRecentQuizSessions(),
+);
+
+/// 指定时间范围内的测验成绩（统计页用）。
+final quizSessionsProvider = StreamProvider.family<
+    List<QuizSessionEntry>,
+    ({DateTime start, DateTime end})>(
+  (ref, range) =>
+      ref.watch(studyRepositoryProvider).watchQuizSessions(range.start, range.end),
+);

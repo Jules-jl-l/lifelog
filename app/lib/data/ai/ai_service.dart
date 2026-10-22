@@ -24,6 +24,50 @@ import 'toolset.dart';
 /// 助手默认名字；用户可在 AI 页或「我的」里改名。
 const defaultAssistantName = '小朝';
 
+/// 会真正写入数据的工具：用于校验模型是否兑现了“记好了”。
+const _writeToolNames = <String>{
+  'create_transaction',
+  'create_transfer',
+  'create_account',
+  'set_budget',
+  'create_weight_record',
+  'create_measure_record',
+  'create_workout_record',
+  'set_height',
+  'add_study_word',
+};
+
+/// 用户这句话是否在要求写数据（而不是查询）。
+///
+/// 只用于兜底校验：命中后若模型没有调用任何工具，会补一轮强制提示。
+final _writeIntentPattern = RegExp(
+  r'(记录|记一下|记下|帮我记|记好|记账|添加|新增|加入|加到|设置|设为|改成|存入|转到|转给|转账|新建|创建)'
+  r'|(预算|身高|体重|围度|腰围|体脂|跑步|运动)[^\d\n]{0,4}\d',
+);
+final _englishWriteVerbPattern = RegExp(
+  r'\b(record|log|save|add|set|create|transfer)\b',
+  caseSensitive: false,
+);
+
+bool _looksLikeWrite(String text) =>
+    _writeIntentPattern.hasMatch(text) ||
+    _englishWriteVerbPattern.hasMatch(text);
+
+/// 模型“口头答应”时插入的强制提示。
+const _writeEnforcement =
+    '你上一轮没有调用任何工具，但用户提出的是写入数据的请求。'
+    '现在必须调用合适的工具完成写入；只有工具返回 ok=true 才能说已经完成，'
+    '禁止在没有工具结果时声称“记好了”。';
+
+Map<String, dynamic>? _decodeToolResult(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  } on FormatException {
+    return null;
+  }
+}
+
 class AiReply {
   const AiReply({required this.content, this.usedLocalRules = false});
 
@@ -151,9 +195,15 @@ class AiService {
       // 工具调用允许连续多轮：模型每轮返回 tool_calls 就执行后继续追问，
       // 直到它给出纯文本回答或达到安全轮数上限。
       const maxToolRounds = 3;
-      final answer = StringBuffer();
+      final writeIntent = _looksLikeWrite(userText);
+      var answer = StringBuffer();
+      var anyTool = false;
+      var writeSucceeded = false;
+      String? writeError;
+      var enforced = false;
 
-      for (var round = 0; round <= maxToolRounds; round++) {
+      var step = 0;
+      while (step <= maxToolRounds) {
         final roundText = StringBuffer();
         final calls = <ToolCall>[];
 
@@ -171,8 +221,22 @@ class AiService {
           if (chunk.toolCalls != null) calls.addAll(chunk.toolCalls!);
         }
 
-        if (calls.isEmpty || round == maxToolRounds) break;
+        if (calls.isEmpty) {
+          // 用户要求写入却没有任何工具调用：模型可能在“口头答应”。
+          // 追加一轮强制提示重试一次，避免用户以为数据已经落库。
+          if (!enforced && step == 0 && writeIntent) {
+            enforced = true;
+            answer = StringBuffer();
+            messages.add({'role': 'user', 'content': _writeEnforcement});
+            step = 0;
+            continue;
+          }
+          break;
+        }
 
+        if (step == maxToolRounds) break;
+
+        anyTool = true;
         messages.add({
           'role': 'assistant',
           'content': roundText.toString(),
@@ -189,20 +253,40 @@ class AiService {
           ],
         });
         for (final call in calls) {
+          final raw = await runTool(call, _toolContext);
+          if (_writeToolNames.contains(call.name)) {
+            final result = _decodeToolResult(raw);
+            if (result?['ok'] == true) {
+              writeSucceeded = true;
+            } else {
+              writeError ??= result?['error']?.toString();
+            }
+          }
           messages.add({
             'role': 'tool',
             'tool_call_id': call.id,
-            'content': await runTool(call, _toolContext),
+            'content': raw,
           });
         }
+        step++;
       }
 
-      final content = answer.toString().trim();
+      var content = answer.toString().trim();
       if (content.isEmpty) {
         yield AiChunk(
           reply: await _localFallback(sessionId, userText, '模型没有返回内容'),
         );
         return;
+      }
+
+      // 写操作用工具结果兜底：没调用工具或执行失败时，明确告知用户，
+      // 不让“记好了”成为没有任何落库的假确认。
+      if (writeIntent && !anyTool) {
+        content = '$content\n\n'
+            '（这次没有真正写入数据，可以换个说法再试一次，'
+            '或到对应页面手动记录。）';
+      } else if (writeIntent && !writeSucceeded && writeError != null) {
+        content = '$content\n\n（操作未完成：$writeError）';
       }
 
       await aiRepository.addMessage(
@@ -311,6 +395,7 @@ class AiService {
         '2. 用户提到账户时用账户名或银行卡后四位匹配；匹配不到就先 list_accounts，仍然不确定要主动询问，不要乱猜。\n'
         '3. 金额单位元、体重千克、围度和身高厘米；信息不全时省略可选参数即可，不要臆测。\n'
         '4. 记账、转账、建账户、设预算、记健康数据、加单词这类写操作直接执行，不用二次确认，但回复里说清做了什么；'
+        '没有调用工具、或工具返回 ok=false 时，绝不能声称已经完成；'
         '工具返回 ok=false 时，把错误原因用人话告诉用户并给出可行建议。\n'
         '5. 用中文回答，口语化、简洁，一般不超过 3 句话；合适时主动给一句简短建议，像朋友一样自然。\n'
         '6. 当前时间：${formatDateTime(DateTime.now())}';

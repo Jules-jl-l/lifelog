@@ -28,6 +28,8 @@ part 'database.g.dart';
   Words,
   ReviewRecords,
   StudyStats,
+  QuizSessions,
+  QuizAnswers,
   ChatSessions,
   ChatMessages,
   AiToolCalls,
@@ -41,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -55,6 +57,27 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.addColumn(accounts, accounts.cardFirst4);
             await m.addColumn(accounts, accounts.cardLast4);
+          }
+          // v3 -> v4：新增拼写 / 听写测验
+          if (from < 4) {
+            await m.createTable(quizSessions);
+            await m.createTable(quizAnswers);
+          }
+          // v4 -> v5：账户分资产/投资/负债三类，转账补充转入账户
+          if (from < 5) {
+            await m.addColumn(accounts, accounts.customLabel);
+            await m.addColumn(accounts, accounts.marketAdjustment);
+            await m.addColumn(transactions, transactions.toAccountId);
+            // 老版本转账只记了「转入：账户名」，尽力回填转入账户。
+            await customStatement(
+              "UPDATE transactions SET to_account_id = ("
+              "SELECT id FROM accounts "
+              "WHERE accounts.name = substr(transactions.note, 4) "
+              "AND accounts.deleted_at IS NULL LIMIT 1"
+              ") WHERE kind = 'transfer' "
+              "AND to_account_id IS NULL "
+              "AND note LIKE '转入：%'",
+            );
           }
         },
         beforeOpen: (details) async {

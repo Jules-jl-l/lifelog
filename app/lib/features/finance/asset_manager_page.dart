@@ -1,12 +1,21 @@
-/// 资产管家：净资产汇总 + 按账户类型分组的余额列表。
+/// 资产管家：资产 / 投资 / 负债三类汇总 + 净资产。
+///
+/// 口径：
+/// - 总资产 = 资产类余额 + 投资类当前市值
+/// - 总负债 = 负债类欠款合计
+/// - 净资产 = 总资产 − 总负债
+/// - 投资盈亏 = 投资类市值 − 累计投入本金
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/async_x.dart';
 import '../../core/utils.dart';
 import '../../data/db/database.dart';
+import '../../data/finance_assets.dart';
+import '../../data/providers.dart';
 import 'account_editor_page.dart';
 import 'account_meta.dart';
 import 'finance_providers.dart';
@@ -14,46 +23,32 @@ import 'finance_providers.dart';
 class AssetManagerPage extends ConsumerWidget {
   const AssetManagerPage({super.key});
 
-  /// 分组顺序与命名。
-  static const _groups = <AccountType, String>{
-    AccountType.debitCard: '储蓄卡',
-    AccountType.creditCard: '信用卡',
-    AccountType.wechat: '虚拟账户',
-    AccountType.alipay: '虚拟账户',
-    AccountType.cash: '现金',
-    AccountType.investment: '投资账户',
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final accounts =
         ref.watch(accountsProvider).dataOrNull ?? const <Account>[];
-    final deltas =
-        ref.watch(accountDeltasProvider).dataOrNull ?? const <String, int>{};
+    final flows =
+        ref.watch(assetFlowsProvider).dataOrNull ?? const <AssetFlow>[];
 
-    final balances = <String, int>{
-      for (final account in accounts)
-        account.id: account.balanceInit + (deltas[account.id] ?? 0),
+    final summary = summarizeAssets(
+      [
+        for (final account in accounts)
+          AssetAccount(
+            id: account.id,
+            type: account.type,
+            balanceInit: account.balanceInit,
+            marketAdjustment: account.marketAdjustment,
+          ),
+      ],
+      flows,
+    );
+
+    final groups = <AccountClass, List<Account>>{
+      for (final cls in AccountClass.values) cls: [],
     };
-    final net = balances.values.fold<int>(0, (sum, value) => sum + value);
-    final assets = balances.values
-        .where((value) => value > 0)
-        .fold<int>(0, (sum, value) => sum + value);
-    final liabilities = balances.values
-        .where((value) => value < 0)
-        .fold<int>(0, (sum, value) => sum + value.abs());
-
-    // 同类型合并成一组（微信/支付宝都归「虚拟账户」）。
-    final groupOrder = <String>[];
-    final groupAccounts = <String, List<Account>>{};
     for (final account in accounts) {
-      final group = _groups[account.type] ?? account.type.label;
-      if (!groupAccounts.containsKey(group)) {
-        groupOrder.add(group);
-        groupAccounts[group] = [];
-      }
-      groupAccounts[group]!.add(account);
+      groups[account.type.accountClass]!.add(account);
     }
 
     return Scaffold(
@@ -63,21 +58,15 @@ class AssetManagerPage extends ConsumerWidget {
           IconButton(
             tooltip: '新增账户',
             icon: const Icon(Icons.add),
-            onPressed: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(builder: (_) => const AccountEditorPage()),
-            ),
+            onPressed: () => _openEditor(context),
           ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          _NetWorthCard(
-            net: net,
-            assets: assets,
-            liabilities: liabilities,
-          ),
-          const SizedBox(height: 16),
+          _NetWorthCard(summary: summary),
+          const SizedBox(height: 18),
           if (accounts.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 48),
@@ -96,41 +85,44 @@ class AssetManagerPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute(
-                        builder: (_) => const AccountEditorPage(),
-                      ),
-                    ),
+                    onPressed: () => _openEditor(context),
                     child: const Text('去添加账户'),
                   ),
                 ],
               ),
             )
           else
-            for (final group in groupOrder) ...[
-              _GroupHeader(
-                title: group,
-                total: groupAccounts[group]!
-                    .fold<int>(0, (sum, a) => sum + (balances[a.id] ?? 0)),
-              ),
-              Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  children: [
-                    for (final account in groupAccounts[group]!)
-                      _AccountRow(
-                        account: account,
-                        balance: balances[account.id] ?? 0,
-                      ),
-                  ],
+            for (final cls in AccountClass.values)
+              if (groups[cls]!.isNotEmpty) ...[
+                _GroupHeader(
+                  accountClass: cls,
+                  total: summary.totalOf(cls),
+                  profit: cls == AccountClass.investment
+                      ? summary.investmentProfit
+                      : null,
                 ),
-              ),
-            ],
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      for (final account in groups[cls]!)
+                        _AccountRow(
+                          account: account,
+                          balance: summary.accounts[account.id],
+                          onEditMarket: account.type.accountClass ==
+                                  AccountClass.investment
+                              ? () => _editMarketValue(context, ref, account)
+                              : null,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
           if (accounts.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
-                '余额 = 初始余额 + 该账户的收入 − 支出',
+                '资产类按余额、投资类按市值计入总资产；负债类欠款计入总负债。',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline),
@@ -140,24 +132,100 @@ class AssetManagerPage extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _openEditor(BuildContext context) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const AccountEditorPage()),
+    );
+  }
+
+  Future<void> _editMarketValue(
+    BuildContext context,
+    WidgetRef ref,
+    Account account,
+  ) async {
+    final repository = ref.read(financeRepositoryProvider);
+    final principal = await repository.investmentPrincipalOnce(account.id);
+    if (!context.mounted) return;
+    final current = principal + account.marketAdjustment;
+
+    final controller = TextEditingController(
+      text: (current / 100).toStringAsFixed(2),
+    );
+    final cents = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('更新市值'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '累计本金 ${formatCents(principal)}',
+              style: Theme.of(dialogContext).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
+              ],
+              decoration: const InputDecoration(
+                labelText: '当前市值',
+                prefixText: '¥ ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+              parseYuanToCents(controller.text),
+            ),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (cents == null) return;
+
+    await repository.saveAccount(
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      balanceInit: account.balanceInit,
+      customType: account.customLabel,
+      marketAdjustment: cents - principal,
+      cardFirst4: account.cardFirst4,
+      cardLast4: account.cardLast4,
+      sort: account.sort,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已更新「${account.name}」市值')),
+    );
+  }
 }
 
 class _NetWorthCard extends StatelessWidget {
-  const _NetWorthCard({
-    required this.net,
-    required this.assets,
-    required this.liabilities,
-  });
+  const _NetWorthCard({required this.summary});
 
-  final int net;
-  final int assets;
-  final int liabilities;
+  final AssetSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final profit = summary.investmentProfit;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -191,7 +259,7 @@ class _NetWorthCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                formatCents(net),
+                formatCents(summary.netWorth),
                 style: theme.textTheme.headlineMedium?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -201,10 +269,23 @@ class _NetWorthCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _HeaderMetric(label: '资产', value: assets),
+                    child: _HeaderMetric(
+                      label: '总资产',
+                      value: formatCents(summary.totalAssets),
+                    ),
                   ),
                   Expanded(
-                    child: _HeaderMetric(label: '负债', value: liabilities),
+                    child: _HeaderMetric(
+                      label: '总负债',
+                      value: formatCents(summary.liabilityTotal),
+                    ),
+                  ),
+                  Expanded(
+                    child: _HeaderMetric(
+                      label: '投资盈亏',
+                      value:
+                          '${profit >= 0 ? '+' : ''}${formatCents(profit)}',
+                    ),
                   ),
                 ],
               ),
@@ -220,7 +301,7 @@ class _HeaderMetric extends StatelessWidget {
   const _HeaderMetric({required this.label, required this.value});
 
   final String label;
-  final int value;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -236,8 +317,8 @@ class _HeaderMetric extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          formatCents(value),
-          style: theme.textTheme.titleMedium?.copyWith(
+          value,
+          style: theme.textTheme.titleSmall?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w600,
           ),
@@ -248,10 +329,15 @@ class _HeaderMetric extends StatelessWidget {
 }
 
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.title, required this.total});
+  const _GroupHeader({
+    required this.accountClass,
+    required this.total,
+    this.profit,
+  });
 
-  final String title;
+  final AccountClass accountClass;
   final int total;
+  final int? profit;
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +347,7 @@ class _GroupHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(title, style: theme.textTheme.titleSmall),
+            child: Text(accountClass.label, style: theme.textTheme.titleSmall),
           ),
           Text(
             formatCents(total),
@@ -269,6 +355,17 @@ class _GroupHeader extends StatelessWidget {
               color: theme.colorScheme.outline,
             ),
           ),
+          if (profit != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              '盈亏 ${profit! >= 0 ? '+' : ''}${formatCents(profit!)}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: profit! < 0
+                    ? theme.colorScheme.error
+                    : const Color(0xFF2E9E62),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -276,15 +373,25 @@ class _GroupHeader extends StatelessWidget {
 }
 
 class _AccountRow extends StatelessWidget {
-  const _AccountRow({required this.account, required this.balance});
+  const _AccountRow({
+    required this.account,
+    required this.balance,
+    this.onEditMarket,
+  });
 
   final Account account;
-  final int balance;
+  final AccountBalance? balance;
+  final VoidCallback? onEditMarket;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = accountColor(account.type);
+    final value = balance?.value ?? 0;
+    final liability = account.type.accountClass == AccountClass.liability;
+    final investment =
+        account.type.accountClass == AccountClass.investment;
+    final profit = balance?.profit ?? 0;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -299,16 +406,45 @@ class _AccountRow extends StatelessWidget {
       ),
       title: Text(accountDisplayName(account)),
       subtitle: Text(
-        account.type.label,
+        investment
+            ? '${accountTypeLabel(account)} · 本金 ${formatCents(balance?.principal ?? 0)}'
+            : accountTypeLabel(account),
         style: theme.textTheme.bodySmall
             ?.copyWith(color: theme.colorScheme.outline),
       ),
-      trailing: Text(
-        formatCents(balance),
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: balance < 0 ? theme.colorScheme.error : null,
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                liability ? '-${formatCents(value)}' : formatCents(value),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: liability ? theme.colorScheme.error : null,
+                ),
+              ),
+              if (investment)
+                Text(
+                  '${profit >= 0 ? '+' : ''}${formatCents(profit)}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: profit < 0
+                        ? theme.colorScheme.error
+                        : const Color(0xFF2E9E62),
+                  ),
+                ),
+            ],
+          ),
+          if (onEditMarket != null)
+            IconButton(
+              tooltip: '更新市值',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              onPressed: onEditMarket,
+            ),
+        ],
       ),
       onTap: () => Navigator.of(context).push<void>(
         MaterialPageRoute(

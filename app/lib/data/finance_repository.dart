@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 
 import '../core/utils.dart';
 import 'db/database.dart';
+import 'finance_assets.dart';
 import 'finance_stats.dart';
 
 class FinanceRepository {
@@ -45,6 +46,8 @@ class FinanceRepository {
     required String name,
     required AccountType type,
     int balanceInit = 0,
+    String? customType,
+    int marketAdjustment = 0,
     String? cardFirst4,
     String? cardLast4,
     int sort = 0,
@@ -60,6 +63,8 @@ class FinanceRepository {
               name: name,
               type: type,
               balanceInit: Value(balanceInit),
+              customLabel: Value(customType),
+              marketAdjustment: Value(marketAdjustment),
               cardFirst4: Value(cardFirst4),
               cardLast4: Value(cardLast4),
               sort: Value(sort),
@@ -72,6 +77,8 @@ class FinanceRepository {
         name: Value(name),
         type: Value(type),
         balanceInit: Value(balanceInit),
+        customLabel: Value(customType),
+        marketAdjustment: Value(marketAdjustment),
         cardFirst4: Value(cardFirst4),
         cardLast4: Value(cardLast4),
         sort: Value(sort),
@@ -113,6 +120,62 @@ class FinanceRepository {
     }
     return deltas;
   }
+
+  // ------------------------------------------------------------ 资产汇总
+  /// 资产计算所需的流水（含转账的转入账户）。
+  Stream<List<AssetFlow>> watchAssetFlows() {
+    final query = _db.select(_db.transactions)
+      ..where((t) => t.deletedAt.isNull());
+    return query.watch().map(
+          (rows) => [
+            for (final row in rows)
+              AssetFlow(
+                kind: row.kind,
+                amount: row.amount,
+                accountId: row.accountId,
+                toAccountId: row.toAccountId,
+              ),
+          ],
+        );
+  }
+
+  Future<List<AssetFlow>> assetFlowsOnce() async {
+    final rows = await (_db.select(_db.transactions)
+          ..where((t) => t.deletedAt.isNull()))
+        .get();
+    return [
+      for (final row in rows)
+        AssetFlow(
+          kind: row.kind,
+          amount: row.amount,
+          accountId: row.accountId,
+          toAccountId: row.toAccountId,
+        ),
+    ];
+  }
+
+  /// 三类资产汇总（净资产、总资产、总负债、投资盈亏）。
+  Future<AssetSummary> assetSummaryOnce() async {
+    final accounts = await accountsOnce();
+    final flows = await assetFlowsOnce();
+    return summarizeAssets(
+      [for (final row in accounts) _toAssetAccount(row)],
+      flows,
+    );
+  }
+
+  /// 某个投资账户的累计投入本金（用于手动更新市值时算盈亏）。
+  Future<int> investmentPrincipalOnce(String accountId) async {
+    final summary = await assetSummaryOnce();
+    return summary.accounts[accountId]?.principal ?? 0;
+  }
+
+  AssetAccount _toAssetAccount(Account row) => AssetAccount(
+        id: row.id,
+        type: row.type,
+        balanceInit: row.balanceInit,
+        marketAdjustment: row.marketAdjustment,
+      );
 
   // ------------------------------------------------------------ 分类
   Stream<List<Category>> watchCategories({TxnKind? kind}) {
@@ -203,6 +266,7 @@ class FinanceRepository {
   Future<void> saveTransaction({
     String? id,
     String? accountId,
+    String? toAccountId,
     String? categoryId,
     required TxnKind kind,
     required int amount,
@@ -226,6 +290,7 @@ class FinanceRepository {
               amount: amount,
               occurredAt: occurredAt,
               accountId: Value(accountId),
+              toAccountId: Value(toAccountId),
               categoryId: Value(categoryId),
               payee: Value(payee),
               note: Value(note),
@@ -241,6 +306,7 @@ class FinanceRepository {
     await (_db.update(_db.transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
         accountId: Value(accountId),
+        toAccountId: Value(toAccountId),
         categoryId: Value(categoryId),
         kind: Value(kind),
         amount: Value(amount),

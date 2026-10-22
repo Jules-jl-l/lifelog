@@ -8,10 +8,12 @@ import '../../core/async_x.dart';
 import '../../core/utils.dart';
 import '../../data/db/database.dart';
 import '../../data/providers.dart';
+import '../../data/study/quiz.dart';
 import '../../data/study_stats.dart';
 import '../../shared/line_trend_chart.dart';
 import '../../shared/stat_card.dart';
 import 'pronunciation.dart';
+import 'quiz_tab.dart';
 import 'review_session.dart';
 import 'study_providers.dart';
 import 'word_import_sheet.dart';
@@ -25,14 +27,21 @@ class StudyPage extends ConsumerStatefulWidget {
 
 class _StudyPageState extends ConsumerState<StudyPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
 
   @override
   void initState() {
     super.initState();
     // 首次进入时写入内置词库（幂等，已存在则跳过）
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(studyRepositoryProvider).ensureBuiltinWordbook();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final books = await ref.read(builtinWordbooksProvider.future);
+        await ref
+            .read(studyRepositoryProvider)
+            .ensureBuiltinWordbooks(books: books);
+      } on Object {
+        // 资源加载失败时不阻塞页面，用户仍可使用自建词库
+      }
     });
   }
 
@@ -52,12 +61,22 @@ class _StudyPageState extends ConsumerState<StudyPage>
           TabBar(
             controller: _tabs,
             labelColor: theme.colorScheme.primary,
-            tabs: const [Tab(text: '背词'), Tab(text: '词库'), Tab(text: '统计')],
+            tabs: const [
+              Tab(text: '背词'),
+              Tab(text: '测验'),
+              Tab(text: '词库'),
+              Tab(text: '统计'),
+            ],
           ),
           Expanded(
             child: TabBarView(
               controller: _tabs,
-              children: const [_ReviewTab(), _WordbooksTab(), _StatsTab()],
+              children: const [
+                _ReviewTab(),
+                QuizTab(),
+                _WordbooksTab(),
+                _StatsTab(),
+              ],
             ),
           ),
         ],
@@ -215,9 +234,8 @@ class _WordbooksTab extends ConsumerWidget {
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
-                        onPressed: () => ref
-                            .read(studyRepositoryProvider)
-                            .deleteWordbook(book.id),
+                        tooltip: '删除词库',
+                        onPressed: () => _deleteWordbook(context, ref, book),
                       ),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -229,6 +247,40 @@ class _WordbooksTab extends ConsumerWidget {
                 ),
         ),
       ],
+    );
+  }
+
+  Future<void> _deleteWordbook(
+    BuildContext context,
+    WidgetRef ref,
+    Wordbook book,
+  ) async {
+    // 删除后列表项会被移除，提前取好 Messenger 以显示提示。
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除词库？'),
+        content: Text(
+          '「${book.name}」及其 ${book.wordCount} 个单词将移入回收站，可在回收站恢复。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await ref.read(studyRepositoryProvider).deleteWordbook(book.id);
+    messenger.showSnackBar(
+      SnackBar(content: Text('已移入回收站：${book.name}')),
     );
   }
 
@@ -460,6 +512,11 @@ class _StatsTabState extends ConsumerState<_StatsTab> {
         const <StudyStatEntry>[];
     final summary = summarizeStudy(stats);
     final points = studyTrend(stats, _period, _anchor);
+    final quiz = ref
+            .watch(quizSessionsProvider((start: start, end: end)))
+            .dataOrNull ??
+        const <QuizSessionEntry>[];
+    final quizSummary = summarizeQuizSessions(quiz);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -532,6 +589,58 @@ class _StatsTabState extends ConsumerState<_StatsTab> {
                 Text('学习量趋势', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 LineTrendChart(points: points, decimals: 0),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('测验战绩', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatCard(
+                        label: '测验次数',
+                        value: '${quizSummary.sessions} 次',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StatCard(
+                        label: '答题量',
+                        value: '${quizSummary.questions} 题',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatCard(
+                        label: '测验正确率',
+                        value: quizSummary.questions == 0
+                            ? '—'
+                            : '${(quizSummary.accuracy * 100).toStringAsFixed(0)}%',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StatCard(
+                        label: '测验用时',
+                        value: quizSummary.durationSec == 0
+                            ? '—'
+                            : formatStudyDuration(quizSummary.durationSec),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

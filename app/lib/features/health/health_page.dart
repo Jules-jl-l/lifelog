@@ -11,6 +11,7 @@ import '../../data/health_stats.dart';
 import '../../data/providers.dart';
 import '../../data/settings_repository.dart';
 import '../../shared/line_trend_chart.dart';
+import '../../shared/measure_charts.dart';
 import '../../shared/period_strip.dart';
 import '../../shared/stat_card.dart';
 import 'health_providers.dart';
@@ -355,49 +356,114 @@ class MeasureTab extends ConsumerStatefulWidget {
 }
 
 class _MeasureTabState extends ConsumerState<MeasureTab> {
-  String? _selected;
+  String _selected = measureOverview;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final entries = ref.watch(measureEntriesProvider(widget.range)).dataOrNull ??
         const <MeasureEntry>[];
-    final parts = measureParts(entries);
-    final selected = _selected ?? (parts.isEmpty ? null : parts.first);
+    final chips = measureChipParts(entries);
+    final selected = chips.contains(_selected) ? _selected : measureOverview;
+    final isOverview = selected == measureOverview;
 
-    final latest = <String, MeasureEntry>{
-      for (final entry in entries) entry.part: entry,
-    };
-    final points = selected == null
-        ? const <MetricPoint>[]
-        : measureTrend(entries, selected, widget.period, widget.anchor);
+    final latestByPart = latestMeasureByPart(entries);
+    final latestMm = <String, int>{};
+    for (final part in coreMeasureParts) {
+      final entry = latestByPart[part];
+      if (entry != null) latestMm[part] = entry.mm;
+    }
+    final latest = latestByPart[selected];
+    final filtered = isOverview
+        ? entries
+        : entries
+            .where((entry) =>
+                canonicalMeasurePart(entry.part) == canonicalMeasurePart(selected))
+            .toList();
+
+    final series = [
+      for (final part in coreMeasureParts)
+        MeasureSeries(
+          part: part,
+          points: measureTrend(entries, part, widget.period, widget.anchor),
+        ),
+    ];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
       children: [
-        if (parts.isNotEmpty)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final part in chips)
+              ChoiceChip(
+                label: Text(part),
+                selected: selected == part,
+                onSelected: (_) => setState(() => _selected = part),
+              ),
+          ],
+        ),
+        if (entries.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: Text('该区间还没有围度记录')),
+          )
+        else if (isOverview) ...[
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 1.05,
             children: [
-              for (final part in parts)
-                ChoiceChip(
-                  label: Text(part),
-                  selected: selected == part,
-                  onSelected: (_) => setState(() => _selected = part),
-                ),
+              for (final part in coreMeasureParts)
+                _MeasureOverviewCard(part: part, entry: latestByPart[part]),
             ],
           ),
-        if (selected != null) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text('综合状态', style: theme.textTheme.titleMedium),
+                      const Spacer(),
+                      Text(
+                        '最新六项围度',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.outline),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  MeasureRadarChart(latest: latestMm),
+                  if (latestMm.length < coreMeasureParts.length)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '未记录的部位靠近中心显示，具体数值见上方卡片',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ] else ...[
           const SizedBox(height: 12),
           StatCard(
             label: '$selected 最新',
-            value: latest[selected] == null
-                ? '—'
-                : '${formatCm(latest[selected]!.mm)} cm',
-            hint: latest[selected] == null
-                ? null
-                : formatDate(latest[selected]!.at),
+            value: latest == null ? '—' : '${formatCm(latest.mm)} cm',
+            hint: latest == null ? null : formatDate(latest.at),
           ),
           const SizedBox(height: 12),
           Card(
@@ -408,7 +474,7 @@ class _MeasureTabState extends ConsumerState<MeasureTab> {
                 children: [
                   Row(
                     children: [
-                      Text('$selected 趋势', style: theme.textTheme.titleMedium),
+                      Text('围度趋势', style: theme.textTheme.titleMedium),
                       const Spacer(),
                       Text(
                         widget.period == ViewPeriod.year ? '按月' : '按天',
@@ -417,38 +483,99 @@ class _MeasureTabState extends ConsumerState<MeasureTab> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  LineTrendChart(
-                    points: points,
-                    decimals: 1,
-                    labelDivisor: 10,
+                  const SizedBox(height: 4),
+                  Text(
+                    '$selected 高亮，其余部位半透明',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                  const SizedBox(height: 8),
+                  MeasureTrendChart(
+                    series: series,
+                    selectedPart: selected,
                   ),
                 ],
               ),
             ),
           ),
         ],
-        const SizedBox(height: 12),
-        Card(
-          child: Column(
-            children: [
-              for (final entry in entries.reversed)
+        if (entries.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Column(
+              children: [
+                for (final entry in filtered.reversed)
                 ListTile(
-                  title: Text('${entry.part} ${formatCm(entry.mm)} cm'),
+                  title: Text(
+                    '${canonicalMeasurePart(entry.part)} '
+                    '${formatCm(entry.mm)} cm',
+                  ),
                   subtitle: Text(formatDateTime(entry.at)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () =>
                       openMeasureEditor(context, existing: entry),
                 ),
-              if (entries.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text('该区间还没有围度记录'),
-                ),
-            ],
+                if (filtered.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('该区间还没有围度记录'),
+                  ),
+              ],
+            ),
           ),
-        ),
+        ],
       ],
+    );
+  }
+}
+
+/// 综合视图的单个围度卡片。
+class _MeasureOverviewCard extends StatelessWidget {
+  const _MeasureOverviewCard({required this.part, required this.entry});
+
+  final String part;
+  final MeasureEntry? entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = measurePartColor(part);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            part,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            entry == null ? '—' : '${formatCm(entry!.mm)} cm',
+            maxLines: 1,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            entry == null ? '未记录' : formatDate(entry!.at),
+            maxLines: 1,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.outline,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../data/db/database.dart';
 import '../../data/finance_stats.dart';
 import '../../data/providers.dart';
 import 'account_editor_page.dart';
+import 'account_meta.dart';
 import 'category_editor_page.dart';
 import 'finance_providers.dart';
 
@@ -80,9 +81,13 @@ class _AccountsTab extends ConsumerWidget {
                   return ListTile(
                     title: Text(account.name),
                     subtitle: Text(
-                      '${account.type.label}'
+                      '${accountTypeLabel(account)}'
                       '${account.cardLast4 == null ? '' : ' · 尾号 ${account.cardLast4}'}'
-                      ' · 初始余额 ¥${formatCents(account.balanceInit)}',
+                      ' · ${switch (account.type.accountClass) {
+                        AccountClass.asset => '初始余额',
+                        AccountClass.investment => '本金',
+                        AccountClass.liability => '欠款',
+                      }} ¥${formatCents(account.type.accountClass == AccountClass.liability ? account.balanceInit.abs() : account.balanceInit)}',
                     ),
                     onTap: () => _editAccount(context, ref, account: account),
                     trailing: IconButton(

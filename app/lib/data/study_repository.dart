@@ -2,12 +2,14 @@
 library;
 
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:drift/drift.dart';
 
 import '../core/utils.dart';
 import 'db/database.dart';
-import 'study/builtin_words.dart';
+import 'study/builtin_wordbooks.dart';
+import 'study/quiz.dart';
 import 'study/word_import.dart';
 import 'study_stats.dart';
 
@@ -408,48 +410,207 @@ class StudyRepository {
   }
 
   // ------------------------------------------------------------ 初始化
-  /// 首次启动时写入内置词库（幂等）。
-  Future<void> ensureBuiltinWordbook() async {
-    final existing = await (_db.select(_db.wordbooks)
-          ..where(
-            (t) => t.deletedAt.isNull() & t.name.equals(builtinWordbookName),
-          )
-          ..limit(1))
-        .getSingleOrNull();
-    if (existing != null) return;
+  bool _builtinReady = false;
+  Future<void>? _builtinSeeding;
 
-    final now = DateTime.now();
-    final bookId = newId();
-    await _db.into(_db.wordbooks).insert(
-          WordbooksCompanion.insert(
-            id: bookId,
-            createdAt: now,
-            updatedAt: now,
-            name: builtinWordbookName,
-            source: const Value('builtin'),
-            wordCount: Value(builtinCet4.length),
+  /// 首次启动时写入内置词库（幂等）。
+  ///
+  /// 资源含 CET-4 / CET-6 / 考研英语 / IT 行业必备词汇。
+  /// 旧版本的「CET-4 核心词」会被复用并补齐为完整 CET-4，避免出现两本重复词库。
+  Future<void> ensureBuiltinWordbooks({
+    List<BuiltinWordbookData>? books,
+  }) {
+    if (_builtinReady) return Future.value();
+    return _builtinSeeding ??= _seedBuiltinWordbooks(books)
+        .then((_) => _builtinReady = true)
+        .whenComplete(() => _builtinSeeding = null);
+  }
+
+  Future<void> ensureBuiltinWordbook() => ensureBuiltinWordbooks();
+
+  Future<void> _seedBuiltinWordbooks(
+    List<BuiltinWordbookData>? books,
+  ) async {
+    final data = books ?? await loadBuiltinWordbooks();
+    // 包含软删除记录：用户删除内置词库后，重启不应再次自动重建。
+    final existing = await _db.select(_db.wordbooks).get();
+
+    for (final bookData in data) {
+      Wordbook? found = existing
+          .where((book) => book.name == bookData.name)
+          .firstOrNull;
+      if (found == null && bookData.slug == 'cet4') {
+        found = existing
+            .where((book) => book.name == legacyBuiltinWordbookName)
+            .firstOrNull;
+      }
+
+      // 词库已被用户删除：保留在回收站，等待用户恢复或彻底删除。
+      if (found != null && found.deletedAt != null) continue;
+
+      if (found == null) {
+        final id = await createWordbook(
+          name: bookData.name,
+          source: 'builtin',
+        );
+        await _insertBuiltinWords(id, bookData.words);
+        continue;
+      }
+
+      final book = found;
+      final rows = await (_db.select(_db.words)
+            ..where(
+              (t) => t.wordbookId.equals(book.id) & t.deletedAt.isNull(),
+            ))
+          .get();
+      final known = {for (final row in rows) row.spelling.toLowerCase()};
+      final missing = [
+        for (final word in bookData.words)
+          if (known.add(word.spelling.toLowerCase())) word,
+      ];
+      if (missing.isNotEmpty) {
+        await _insertBuiltinWords(book.id, missing);
+      }
+      if (bookData.slug == 'cet4' && book.name == legacyBuiltinWordbookName) {
+        await (_db.update(_db.wordbooks)..where((t) => t.id.equals(book.id)))
+            .write(
+          WordbooksCompanion(
+            name: Value(bookData.name),
+            updatedAt: Value(DateTime.now()),
           ),
         );
-
-    await _db.batch((batch) {
-      batch.insertAll(_db.words, [
-        for (final word in builtinCet4)
-          WordsCompanion.insert(
-            id: newId(),
-            createdAt: now,
-            updatedAt: now,
-            wordbookId: bookId,
-            spelling: word.spelling,
-            phoneticUk: Value(word.phoneticUk),
-            phoneticUs: Value(word.phoneticUs),
-            meaningsJson: Value(jsonEncode(word.meanings)),
-            examplesJson: Value(
-              word.example == null ? null : jsonEncode([word.example]),
-            ),
-          ),
-      ]);
-    });
+      }
+    }
   }
+
+  Future<void> _insertBuiltinWords(
+    String wordbookId,
+    List<BuiltinWordData> words,
+  ) async {
+    if (words.isEmpty) return;
+    final now = DateTime.now();
+    const chunkSize = 200;
+    for (var start = 0; start < words.length; start += chunkSize) {
+      final slice = words.sublist(
+        start,
+        min(start + chunkSize, words.length),
+      );
+      await _db.batch(
+        (batch) => batch.insertAll(_db.words, [
+          for (final word in slice)
+            WordsCompanion.insert(
+              id: newId(),
+              createdAt: now,
+              updatedAt: now,
+              wordbookId: wordbookId,
+              spelling: word.spelling,
+              meaningsJson: Value(jsonEncode(word.meanings)),
+            ),
+        ]),
+      );
+    }
+    await refreshWordCount(wordbookId);
+  }
+
+  // ------------------------------------------------------------ 测验
+  /// 保存一轮已完成的测验（会话 + 逐题作答），返回会话 id。
+  Future<String> saveQuizResult({
+    String? wordbookId,
+    required QuizMode mode,
+    required List<QuizAnswerDraft> answers,
+    required int durationSec,
+  }) async {
+    final now = DateTime.now();
+    final sessionId = newId();
+    final correct = answers.where((answer) => answer.correct).length;
+
+    await _db.transaction(() async {
+      await _db.into(_db.quizSessions).insert(
+            QuizSessionsCompanion.insert(
+              id: sessionId,
+              createdAt: now,
+              updatedAt: now,
+              wordbookId: Value(wordbookId),
+              mode: mode.storageKey,
+              total: Value(answers.length),
+              correct: Value(correct),
+              durationSec: Value(durationSec),
+            ),
+          );
+      if (answers.isNotEmpty) {
+        await _db.batch(
+          (batch) => batch.insertAll(_db.quizAnswers, [
+            for (final answer in answers)
+              QuizAnswersCompanion.insert(
+                id: newId(),
+                createdAt: now,
+                updatedAt: now,
+                sessionId: sessionId,
+                wordId: answer.wordId,
+                answer: answer.answer,
+                correct: Value(answer.correct),
+                answeredAt: answer.answeredAt,
+              ),
+          ]),
+        );
+      }
+    });
+
+    return sessionId;
+  }
+
+  Stream<List<QuizSessionEntry>> watchRecentQuizSessions({int limit = 5}) {
+    final query = _db.select(_db.quizSessions)
+      ..where((t) => t.deletedAt.isNull())
+      ..orderBy([
+        (t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc),
+      ])
+      ..limit(limit);
+    return query.watch().map(
+          (rows) => [for (final row in rows) _toQuizSession(row)],
+        );
+  }
+
+  Stream<List<QuizSessionEntry>> watchQuizSessions(
+    DateTime from,
+    DateTime to,
+  ) {
+    final query = _db.select(_db.quizSessions)
+      ..where(
+        (t) => t.deletedAt.isNull() &
+            t.createdAt.isBiggerOrEqualValue(startOfDay(from)) &
+            t.createdAt.isSmallerOrEqualValue(endOfDay(to)),
+      )
+      ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]);
+    return query.watch().map(
+          (rows) => [for (final row in rows) _toQuizSession(row)],
+        );
+  }
+
+  Future<List<QuizSessionEntry>> quizSessionsOnce(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final rows = await (_db.select(_db.quizSessions)
+          ..where(
+            (t) => t.deletedAt.isNull() &
+                t.createdAt.isBiggerOrEqualValue(startOfDay(from)) &
+                t.createdAt.isSmallerOrEqualValue(endOfDay(to)),
+          )
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+        .get();
+    return [for (final row in rows) _toQuizSession(row)];
+  }
+
+  QuizSessionEntry _toQuizSession(QuizSession row) => QuizSessionEntry(
+        id: row.id,
+        wordbookId: row.wordbookId,
+        mode: QuizModeLabel.fromStorage(row.mode),
+        total: row.total,
+        correct: row.correct,
+        durationSec: row.durationSec,
+        createdAt: row.createdAt,
+      );
 
   WordEntry _toEntry(Word row) => WordEntry(
         id: row.id,

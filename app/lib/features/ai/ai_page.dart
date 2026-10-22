@@ -50,8 +50,17 @@ class _AiPageState extends ConsumerState<AiPage> {
   /// 正在流式接收的助手回复；为 null 表示当前没有进行中的回复。
   String? _draft;
 
-  /// 麦克风正在拾音。
-  bool _listening = false;
+  /// 按住说话：长按输入框开始录音。
+  bool _holdActive = false;
+  bool _recording = false;
+  bool _cancelArmed = false;
+
+  /// 松开后等待系统返回最终识别结果。
+  bool _voicePendingFinal = false;
+  Timer? _finalTimer;
+
+  /// 每次录音的会话号；取消后自增，丢弃迟到的识别回调。
+  int _voiceSession = 0;
 
   /// 页面用过语音输入时记下实现，dispose 里用它停止拾音。
   SpeechInput? _speech;
@@ -65,7 +74,8 @@ class _AiPageState extends ConsumerState<AiPage> {
 
   @override
   void dispose() {
-    if (_listening) {
+    _finalTimer?.cancel();
+    if (_recording) {
       unawaited(_speech?.cancel() ?? Future<void>.value());
     }
     _input.dispose();
@@ -87,9 +97,28 @@ class _AiPageState extends ConsumerState<AiPage> {
       _sessionId = sessions.first.id;
     }
 
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: Text(assistantName),
+        centerTitle: true,
+        backgroundColor: theme.colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(assistantName, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 1),
+            Text(
+              'AI 生成可能有误，注意核实',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: 11,
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: '给助手改名',
@@ -204,7 +233,7 @@ class _AiPageState extends ConsumerState<AiPage> {
 
     return ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
       itemCount: messages.length + (draft == null ? 0 : 1),
       itemBuilder: (context, index) {
         if (index < messages.length) {
@@ -220,34 +249,59 @@ class _AiPageState extends ConsumerState<AiPage> {
     final name =
         ref.watch(assistantNameProvider).dataOrNull ?? defaultAssistantName;
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
       child: Column(
         children: [
-          Icon(
-            Icons.auto_awesome,
-            size: 48,
-            color: theme.colorScheme.primary,
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.primary,
+                  theme.colorScheme.tertiary,
+                ],
+              ),
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              size: 34,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 12),
-          Text('你好，我是$name', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
+          Text('你好，我是$name', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 10),
           Text(
             '记账、转账、账户与预算、体重围度运动、背单词，说一声我就能直接帮你操作。\n'
             '没网或没配 Key 时会自动切到本地规则记账。',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.outline),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+              height: 1.6,
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '试试这样说',
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            alignment: WrapAlignment.center,
             children: [
               for (final suggestion in _suggestions)
-                ActionChip(
-                  label: Text(suggestion),
-                  onPressed: _sending ? null : () => _send(suggestion),
+                _SuggestionChip(
+                  label: suggestion,
+                  onTap: _sending ? null : () => _send(suggestion),
                 ),
             ],
           ),
@@ -258,68 +312,96 @@ class _AiPageState extends ConsumerState<AiPage> {
 
   Widget _bubble(ChatMessage message, List<ChatMessage> all) {
     final theme = Theme.of(context);
-    final isUser = message.role == 'user';
 
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        // 长按弹出「复制这条 / 复制整段对话」
-        onLongPress: () => _showMessageActions(message, all),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78,
+    // 豆包式布局：用户消息是右侧蓝色气泡，助手回复直接平铺在背景上。
+    if (message.role == 'user') {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: GestureDetector(
+          onLongPress: () => _showMessageActions(message, all),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.76,
+            ),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(6),
+              ),
+            ),
+            child: Text(
+              message.content,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onPrimary,
+                height: 1.45,
+              ),
+            ),
           ),
-          decoration: BoxDecoration(
-            color: isUser
-                ? theme.colorScheme.primaryContainer
-                : theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: isUser
-              ? Text(message.content, style: theme.textTheme.bodyMedium)
-              : MarkdownMessage(data: message.content),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onLongPress: () => _showMessageActions(message, all),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            MarkdownMessage(data: message.content),
+            const SizedBox(height: 6),
+            _AssistantActionRow(
+              onCopy: () => _copyText(message.content),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  /// 流式接收中的助手气泡：没有正文时显示「正在思考」。
+  /// 流式接收中的助手回复：没有正文时显示「正在思考」。
   Widget _draftBubble(String? text) {
     final theme = Theme.of(context);
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: text == null || text.isEmpty
-            ? Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '正在思考…',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.outline),
-                  ),
-                ],
-              )
-            : MarkdownMessage(data: text),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (text == null || text.isEmpty)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '正在思考…',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+              ],
+            )
+          else
+            MarkdownMessage(data: text),
+        ],
       ),
+    );
+  }
+
+  Future<void> _copyText(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已复制到剪贴板')),
     );
   }
 
@@ -369,47 +451,100 @@ class _AiPageState extends ConsumerState<AiPage> {
   }
 
   Widget _buildComposer() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              tooltip: '上传图片',
-              onPressed:
-                  _sending ? null : () => openReceiptImport(context, ref),
-              icon: const Icon(Icons.image_outlined),
-            ),
-            Expanded(
-              child: TextField(
-                controller: _input,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                decoration: const InputDecoration(
-                  hintText: '说点什么，例如「午饭 30」',
-                ),
-                onSubmitted: (_) => _send(),
+            if (_recording)
+              Center(child: _buildVoiceStatus())
+            else
+              _buildQuickPrompts(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: '上传图片',
+                    onPressed:
+                        _sending ? null : () => openReceiptImport(context, ref),
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                  ),
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          decoration: BoxDecoration(
+                            color: _recording
+                                ? theme.colorScheme.primary
+                                    .withValues(alpha: 0.12)
+                                : theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(26),
+                          ),
+                          child: TextField(
+                            controller: _input,
+                            minLines: 1,
+                            maxLines: 4,
+                            textInputAction: TextInputAction.send,
+                            style: theme.textTheme.bodyMedium,
+                            decoration: InputDecoration(
+                              hintText: '发消息或按住说话……',
+                              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 13),
+                            ),
+                            onSubmitted: (_) => _send(),
+                          ),
+                        ),
+                        // 透明覆盖层只接管长按，不拦截点击输入。
+                        Positioned.fill(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onLongPressStart: _onVoiceHoldStart,
+                            onLongPressMoveUpdate: _onVoiceHoldMove,
+                            onLongPressEnd: _onVoiceHoldEnd,
+                            onLongPressCancel: _onVoiceHoldCancel,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _sending ? null : () => _send(),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: _listening ? '停止语音输入' : '语音输入',
-              onPressed: _sending ? null : _toggleVoice,
-              icon: Icon(_listening ? Icons.mic : Icons.mic_none_outlined),
-              color: _listening ? Theme.of(context).colorScheme.error : null,
-            ),
-            IconButton.filled(
-              onPressed: _sending ? null : () => _send(),
-              icon: _sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
             ),
           ],
         ),
@@ -417,10 +552,44 @@ class _AiPageState extends ConsumerState<AiPage> {
     );
   }
 
+  /// 输入框上方的快捷入口，点击后把示例填进输入框，方便改一改再发。
+  Widget _buildQuickPrompts() {
+    const prompts = <(String, String)>[
+      ('记一笔', '午饭 30'),
+      ('查收支', '这个月花了多少'),
+      ('看健康', '我最近体重多少'),
+      ('背单词', '今天要复习多少单词'),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          for (final (label, example) in prompts)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                visualDensity: VisualDensity.compact,
+                label: Text(label),
+                onPressed: _sending
+                    ? null
+                    : () {
+                        _input.text = example;
+                        _input.selection =
+                            TextSelection.collapsed(offset: example.length);
+                      },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _send([String? preset]) async {
     final text = (preset ?? _input.text).trim();
     if (text.isEmpty || _sending) return;
-    if (_listening) await _stopVoice();
+    if (_recording) await _cancelVoice();
 
     final service = ref.read(aiServiceProvider);
     setState(() {
@@ -481,19 +650,44 @@ class _AiPageState extends ConsumerState<AiPage> {
     }
   }
 
-  /// 麦克风：第一次点击开始拾音，再点一次结束。
-  Future<void> _toggleVoice() async {
+  // ----------------------------------------------------------- 按住说话
+
+  void _onVoiceHoldStart(LongPressStartDetails details) {
+    // 输入框有内容时保留系统选择/编辑手势，不触发说话。
+    if (_sending || _recording || _input.text.isNotEmpty) return;
+    _holdActive = true;
+    _cancelArmed = false;
+    unawaited(_beginVoiceHold());
+  }
+
+  void _onVoiceHoldMove(LongPressMoveUpdateDetails details) {
+    if (!_recording) return;
+    // 豆包交互：按住后上滑一定距离松手即取消。
+    final armed = details.offsetFromOrigin.dy < -80;
+    if (armed == _cancelArmed) return;
+    setState(() => _cancelArmed = armed);
+  }
+
+  void _onVoiceHoldEnd(LongPressEndDetails details) {
+    _holdActive = false;
+    if (_recording) unawaited(_endVoiceHold());
+  }
+
+  void _onVoiceHoldCancel() {
+    _holdActive = false;
+    if (_recording) unawaited(_cancelVoice());
+  }
+
+  Future<void> _beginVoiceHold() async {
+    if (_recording) return;
+    final session = ++_voiceSession;
     final speech = ref.read(speechInputProvider);
     _speech = speech;
-
-    if (_listening) {
-      await _stopVoice();
-      return;
-    }
 
     final ready = await speech.ensureReady();
     if (!mounted) return;
     if (!ready) {
+      _holdActive = false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('这台设备暂时用不了语音输入，先用键盘吧')),
       );
@@ -502,32 +696,105 @@ class _AiPageState extends ConsumerState<AiPage> {
 
     final started = await speech.start(
       onResult: (text, isFinal) {
-        if (!mounted) return;
-        if (text.isEmpty) {
-          if (isFinal) setState(() => _listening = false);
+        if (!mounted || session != _voiceSession) return;
+        if (isFinal) {
+          _voicePendingFinal = false;
+          _finalTimer?.cancel();
+        } else if (!_recording && !_voicePendingFinal) {
+          // 已经取消或已结束，忽略迟到的中间结果
           return;
         }
-        setState(() {
-          _input.text = text;
-          _input.selection = TextSelection.collapsed(offset: text.length);
-          _listening = !isFinal;
-        });
+        if (text.isEmpty) return;
+        _input.text = text;
+        _input.selection = TextSelection.collapsed(offset: text.length);
       },
     );
 
-    if (!mounted) return;
+    if (!mounted || session != _voiceSession) return;
     if (!started) {
+      _holdActive = false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('没能启动语音识别，请检查麦克风权限')),
       );
       return;
     }
-    setState(() => _listening = true);
+    if (!_holdActive) {
+      // 手指在初始化期间已经抬起：不保留这段录音
+      await speech.cancel();
+      return;
+    }
+    setState(() {
+      _recording = true;
+      _cancelArmed = false;
+    });
   }
 
-  Future<void> _stopVoice() async {
+  /// 松开手指：未上滑则确认输入，上滑则取消。
+  Future<void> _endVoiceHold() async {
+    final cancel = _cancelArmed;
+    _holdActive = false;
+    _cancelArmed = false;
+    setState(() => _recording = false);
+
+    if (cancel) {
+      await _cancelVoice();
+      return;
+    }
+
+    _voicePendingFinal = true;
+    _finalTimer?.cancel();
+    _finalTimer = Timer(const Duration(seconds: 3), () {
+      _voicePendingFinal = false;
+    });
     await _speech?.stop();
-    if (mounted) setState(() => _listening = false);
+  }
+
+  /// 取消本轮语音输入，丢弃已识别的文字与迟到的结果。
+  Future<void> _cancelVoice() async {
+    _voiceSession++;
+    _holdActive = false;
+    _cancelArmed = false;
+    _voicePendingFinal = false;
+    _finalTimer?.cancel();
+    if (_recording) setState(() => _recording = false);
+    _input.clear();
+    await _speech?.cancel();
+  }
+
+  Widget _buildVoiceStatus() {
+    final theme = Theme.of(context);
+    final cancel = _cancelArmed;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      decoration: BoxDecoration(
+        color: cancel
+            ? theme.colorScheme.errorContainer
+            : theme.colorScheme.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            cancel ? Icons.close : Icons.mic,
+            size: 16,
+            color: cancel
+                ? theme.colorScheme.onErrorContainer
+                : theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            cancel ? '松开取消' : '松开发送，上滑取消',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cancel
+                  ? theme.colorScheme.onErrorContainer
+                  : theme.colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openKey(bool configured) async {
@@ -728,6 +995,65 @@ class _PendingTasksSheet extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 欢迎页的示例胶囊。
+class _SuggestionChip extends StatelessWidget {
+  const _SuggestionChip({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 助手回复下方的轻量操作栏（目前提供复制）。
+class _AssistantActionRow extends StatelessWidget {
+  const _AssistantActionRow({required this.onCopy});
+
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton.icon(
+          onPressed: onCopy,
+          icon: const Icon(Icons.copy_outlined, size: 15),
+          label: const Text('复制'),
+          style: TextButton.styleFrom(
+            foregroundColor: theme.colorScheme.outline,
+            textStyle: theme.textTheme.labelSmall,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            minimumSize: const Size(0, 28),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -4,6 +4,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/db/database.dart';
+import '../../data/finance_assets.dart';
 import '../../data/finance_stats.dart';
 import '../../data/providers.dart';
 
@@ -25,6 +26,11 @@ final accountsProvider = StreamProvider<List<Account>>(
 /// 账户流水净额（收入 - 支出），资产管家用。
 final accountDeltasProvider = StreamProvider<Map<String, int>>(
   (ref) => ref.watch(financeRepositoryProvider).watchAccountDeltas(),
+);
+
+/// 资产计算所需的流水（含转账转入账户）。
+final assetFlowsProvider = StreamProvider<List<AssetFlow>>(
+  (ref) => ref.watch(financeRepositoryProvider).watchAssetFlows(),
 );
 
 final categoriesProvider = StreamProvider<List<Category>>(

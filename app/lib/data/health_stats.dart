@@ -57,7 +57,45 @@ class WorkoutEntry {
 }
 
 /// 围度默认部位顺序（未收录的部位会被追加到末尾）。
-const defaultMeasureParts = <String>['胸围', '腰围', '臀围', '臂围', '大腿', '小腿', '颈围'];
+const defaultMeasureParts = <String>[
+  '胸围',
+  '腰围',
+  '臀围',
+  '臂围',
+  '大腿围',
+  '小腿围',
+  '颈围',
+];
+
+/// 「综合」视图：一次看六个核心围度。
+const measureOverview = '综合';
+
+/// 综合视图里的六个核心围度（2 行 3 列）。
+const coreMeasureParts = <String>[
+  '胸围',
+  '腰围',
+  '臀围',
+  '臂围',
+  '大腿围',
+  '小腿围',
+];
+
+/// 旧数据 / AI 可能写成「大腿」「小腿」，统一归到带「围」的标准名。
+const _measureAliases = <String, String>{
+  '大腿': '大腿围',
+  '小腿': '小腿围',
+  '大臂围': '臂围',
+  '上臂围': '臂围',
+  '手臂围': '臂围',
+  '胸部': '胸围',
+  '腰部': '腰围',
+  '臀部': '臀围',
+};
+
+String canonicalMeasurePart(String part) {
+  final trimmed = part.trim();
+  return _measureAliases[trimmed] ?? trimmed;
+}
 
 /// 运动类型候选。
 const workoutTypes = <String>['跑步', '快走', '骑行', '游泳', '力量', '其他'];
@@ -109,7 +147,9 @@ List<MetricPoint> measureTrend(
   DateTime anchor,
 ) =>
     _trendByBucket(
-      entries.where((item) => item.part == part),
+      entries.where(
+        (item) => canonicalMeasurePart(item.part) == canonicalMeasurePart(part),
+      ),
       period,
       anchor,
       (item) => item.mm.toDouble(),
@@ -175,7 +215,9 @@ String bmiLabel(double bmi) {
 
 /// 出现过的部位，按默认顺序排列，未收录的追加在后面。
 List<String> measureParts(Iterable<MeasureEntry> entries) {
-  final present = {for (final entry in entries) entry.part};
+  final present = {
+    for (final entry in entries) canonicalMeasurePart(entry.part),
+  };
   final result = [
     for (final part in defaultMeasureParts)
       if (present.contains(part)) part,
@@ -184,6 +226,30 @@ List<String> measureParts(Iterable<MeasureEntry> entries) {
     if (!result.contains(part)) result.add(part);
   }
   return result;
+}
+
+/// 围度 Tab 的标签：固定六个核心部位 + 「综合」，自定义部位追加在末尾。
+List<String> measureChipParts(Iterable<MeasureEntry> entries) {
+  final extras = [
+    for (final part in measureParts(entries))
+      if (!coreMeasureParts.contains(part) && part != measureOverview) part,
+  ];
+  return [measureOverview, ...coreMeasureParts, ...extras];
+}
+
+/// 每个部位的最新一条记录（同部位按时间取最新）。
+Map<String, MeasureEntry> latestMeasureByPart(
+  Iterable<MeasureEntry> entries,
+) {
+  final latest = <String, MeasureEntry>{};
+  for (final entry in entries) {
+    final part = canonicalMeasurePart(entry.part);
+    final current = latest[part];
+    if (current == null || entry.at.isAfter(current.at)) {
+      latest[part] = entry;
+    }
+  }
+  return latest;
 }
 
 /// 运动汇总。

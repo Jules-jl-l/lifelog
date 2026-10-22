@@ -14,7 +14,7 @@ import '../finance_stats.dart';
 import '../health_repository.dart';
 import '../health_stats.dart';
 import '../settings_repository.dart';
-import '../study/builtin_words.dart';
+import '../study/builtin_wordbooks.dart';
 import '../study_repository.dart';
 import '../study_stats.dart';
 import 'deepseek_client.dart';
@@ -119,12 +119,16 @@ const aiToolSpecs = <Map<String, dynamic>>[
             'enum': [
               'cash',
               'debit_card',
+              'virtual',
+              'receivable',
+              'stock',
+              'fund',
+              'wealth',
               'credit_card',
-              'wechat',
-              'alipay',
-              'investment',
+              'short_loan',
+              'long_loan',
             ],
-            'description': '账户类型：现金/储蓄卡/信用卡/微信/支付宝/投资账户',
+            'description': '账户类型：现金/储蓄卡/虚拟账户/债权/股票/基金/理财/信用卡/短期信贷/长期借贷',
           },
           'initial_balance_yuan': {'type': 'number', 'description': '初始余额（元），默认 0'},
           'card_last4': {'type': 'string', 'description': '银行卡后四位，可选'},
@@ -245,6 +249,10 @@ const aiToolSpecs = <Map<String, dynamic>>[
           'minutes': {'type': 'integer', 'description': '时长，单位分钟'},
           'distance_km': {'type': 'number', 'description': '距离，单位公里，可选'},
           'calories': {'type': 'integer', 'description': '消耗，单位千卡，可选'},
+          'started_at': {
+            'type': 'string',
+            'description': '开始时间 ISO8601；省略默认当前时间。用户说“昨天”时按昨天填写',
+          },
         },
         'required': ['type', 'minutes'],
       },
@@ -390,7 +398,7 @@ Future<String> _createTransaction(
   ToolContext context,
 ) async {
   final kind = args['kind'] == 'income' ? TxnKind.income : TxnKind.expense;
-  final yuan = (args['amount'] as num?)?.toDouble() ?? 0;
+  final yuan = _asDouble(args['amount']) ?? 0;
   if (yuan <= 0) return _fail('金额必须大于 0');
 
   final amount = (yuan * 100).round();
@@ -432,7 +440,7 @@ Future<String> _createTransfer(
   Map<String, dynamic> args,
   ToolContext context,
 ) async {
-  final yuan = (args['amount'] as num?)?.toDouble() ?? 0;
+  final yuan = _asDouble(args['amount']) ?? 0;
   if (yuan <= 0) return _fail('转账金额必须大于 0');
 
   final accounts = await context.finance.accountsOnce();
@@ -452,6 +460,7 @@ Future<String> _createTransfer(
     amount: amount,
     occurredAt: _parseMoment(args['occurred_at']),
     accountId: from.id,
+    toAccountId: to.id,
     note: '转入：${to.name}',
     source: TxnSource.ai,
   );
@@ -493,24 +502,30 @@ Future<String> _queryExpense(
 
 Future<String> _listAccounts(ToolContext context) async {
   final accounts = await context.finance.accountsOnce();
-  final deltas = await context.finance.accountDeltasOnce();
+  final summary = await context.finance.assetSummaryOnce();
 
-  var total = 0;
   final items = <Map<String, dynamic>>[];
   for (final account in accounts) {
-    final balance = account.balanceInit + (deltas[account.id] ?? 0);
-    total += balance;
+    final balance = summary.accounts[account.id];
     items.add({
       'name': account.name,
       'type': account.type.label,
       'card_last4': account.cardLast4,
+      'class': account.type.accountClass.label,
       'initial_balance_yuan': account.balanceInit / 100,
-      'balance_yuan': balance / 100,
+      'balance_yuan': (balance?.value ?? 0) / 100,
+      if (account.type.accountClass == AccountClass.investment) ...{
+        'principal_yuan': (balance?.principal ?? 0) / 100,
+        'profit_yuan': (balance?.profit ?? 0) / 100,
+      },
     });
   }
 
   return _ok({
-    'total_assets_yuan': total / 100,
+    'total_assets_yuan': summary.totalAssets / 100,
+    'total_liabilities_yuan': summary.liabilityTotal / 100,
+    'net_worth_yuan': summary.netWorth / 100,
+    'investment_profit_yuan': summary.investmentProfit / 100,
     'accounts': items,
   });
 }
@@ -525,7 +540,14 @@ Future<String> _createAccount(
   final type = switch (args['type']) {
     'cash' => AccountType.cash,
     'debit_card' => AccountType.debitCard,
+    'virtual' => AccountType.virtual,
+    'receivable' => AccountType.receivable,
+    'stock' => AccountType.stock,
+    'fund' => AccountType.fund,
+    'wealth' => AccountType.wealth,
     'credit_card' => AccountType.creditCard,
+    'short_loan' => AccountType.shortLoan,
+    'long_loan' => AccountType.longLoan,
     'wechat' => AccountType.wechat,
     'alipay' => AccountType.alipay,
     'investment' => AccountType.investment,
@@ -539,8 +561,9 @@ Future<String> _createAccount(
   );
   if (duplicated) return _fail('已存在同名账户「$name」');
 
-  final initYuan = (args['initial_balance_yuan'] as num?)?.toDouble() ?? 0;
-  final initCents = (initYuan * 100).round();
+  final initYuan = _asDouble(args['initial_balance_yuan']) ?? 0;
+  var initCents = (initYuan * 100).round();
+  if (type.accountClass == AccountClass.liability) initCents = initCents.abs();
   final last4 = _digits(args['card_last4'] as String?, length: 4);
   final first4 = _digits(args['card_first4'] as String?, length: 4);
   final sort = existing.isEmpty
@@ -556,9 +579,14 @@ Future<String> _createAccount(
     sort: sort,
   );
 
+  final amountLabel = type.accountClass == AccountClass.liability
+      ? '当前欠款'
+      : type.accountClass == AccountClass.investment
+          ? '初始本金'
+          : '初始余额';
   return _ok({
     'summary': '已创建${type.label}账户「$name」'
-        '${initCents == 0 ? '' : '，初始余额 ¥${formatCents(initCents)}'}',
+        '${initCents == 0 ? '' : '，$amountLabel ¥${formatCents(initCents)}'}',
     'account_id': id,
   });
 }
@@ -585,7 +613,7 @@ Future<String> _setBudget(
   Map<String, dynamic> args,
   ToolContext context,
 ) async {
-  final yuan = (args['amount_yuan'] as num?)?.toDouble() ?? 0;
+  final yuan = _asDouble(args['amount_yuan']) ?? 0;
   if (yuan <= 0) return _fail('预算金额必须大于 0');
 
   final month = (args['month'] as String?)?.trim() ?? _currentMonth();
@@ -679,13 +707,18 @@ Future<String> _createWeight(
   Map<String, dynamic> args,
   ToolContext context,
 ) async {
-  final kg = (args['weight_kg'] as num?)?.toDouble() ?? 0;
-  if (kg <= 0) return _fail('体重必须大于 0');
+  final kg = _asDouble(args['weight_kg']) ?? 0;
+  if (kg <= 0 || kg > 500) return _fail('体重数值不合理（0~500 公斤）');
+
+  final bodyFat = _asDouble(args['body_fat_pct']);
+  if (bodyFat != null && (bodyFat <= 0 || bodyFat > 100)) {
+    return _fail('体脂率应在 0~100% 之间');
+  }
 
   await context.health.saveWeight(
     recordedAt: _parseMoment(args['measured_at']),
     grams: (kg * 1000).round(),
-    bodyFatPct: (args['body_fat_pct'] as num?)?.toDouble(),
+    bodyFatPct: bodyFat,
   );
   return _ok({'summary': '已记录体重 ${kg.toStringAsFixed(2)} kg'});
 }
@@ -695,9 +728,9 @@ Future<String> _createMeasure(
   ToolContext context,
 ) async {
   final part = (args['part'] as String?)?.trim();
-  final cm = (args['value_cm'] as num?)?.toDouble() ?? 0;
+  final cm = _asDouble(args['value_cm']) ?? 0;
   if (part == null || part.isEmpty) return _fail('缺少围度部位');
-  if (cm <= 0) return _fail('围度数值必须大于 0');
+  if (cm <= 0 || cm > 300) return _fail('围度数值不合理（0~300 厘米）');
 
   await context.health.saveMeasure(
     measuredAt: _parseMoment(args['measured_at']),
@@ -712,18 +745,18 @@ Future<String> _createWorkout(
   ToolContext context,
 ) async {
   final type = (args['type'] as String?)?.trim();
-  final minutes = (args['minutes'] as num?)?.toInt() ?? 0;
+  final minutes = _asInt(args['minutes']) ?? 0;
   if (type == null || type.isEmpty) return _fail('缺少运动类型');
-  if (minutes <= 0) return _fail('时长必须大于 0');
+  if (minutes <= 0 || minutes > 1440) return _fail('时长不合理（1~1440 分钟）');
 
-  final km = (args['distance_km'] as num?)?.toDouble();
+  final km = _asDouble(args['distance_km']);
 
   await context.health.saveWorkout(
-    startedAt: DateTime.now(),
+    startedAt: _parseMoment(args['started_at']),
     minutes: minutes,
     type: type,
     meters: km == null ? null : (km * 1000).round(),
-    calories: (args['calories'] as num?)?.toInt(),
+    calories: _asInt(args['calories']),
   );
   return _ok({
     'summary': '已记录运动：$type ${formatDuration(minutes)}',
@@ -824,7 +857,7 @@ Future<String> _setHeight(
   Map<String, dynamic> args,
   ToolContext context,
 ) async {
-  final cm = (args['height_cm'] as num?)?.toInt() ?? 0;
+  final cm = _asInt(args['height_cm']) ?? 0;
   if (cm < 50 || cm > 300) return _fail('身高数值不合理（50~300 厘米）');
 
   await context.settings.set(SettingKeys.heightCm, '$cm');
@@ -890,11 +923,15 @@ Future<String> _addStudyWord(
   if (spelling == null || spelling.isEmpty) return _fail('缺少单词拼写');
 
   final bookName = ((args['wordbook'] as String?)?.trim());
-  final targetName = (bookName == null || bookName.isEmpty)
-      ? builtinWordbookName
-      : bookName;
+  final usesDefault = bookName == null || bookName.isEmpty;
+  var targetName = usesDefault ? defaultBuiltinWordbookName : bookName;
 
   var book = await context.study.findWordbookByName(targetName);
+  if (book == null && usesDefault) {
+    // 默认词库可能已被用户删除：改放自建词库，避免把删掉的内置词库又建回来。
+    targetName = '我的词库';
+    book = await context.study.findWordbookByName(targetName);
+  }
   book ??= await _getOrCreateBuiltin(context, targetName);
   if (book == null) return _fail('词库「$targetName」不存在');
 
@@ -919,7 +956,7 @@ Future<Wordbook?> _getOrCreateBuiltin(
 ) async {
   final id = await context.study.createWordbook(
     name: name,
-    source: name == builtinWordbookName ? 'builtin' : 'custom',
+    source: name == defaultBuiltinWordbookName ? 'builtin' : 'custom',
   );
   final books = await context.study.wordbooksOnce();
   for (final book in books) {
@@ -943,11 +980,7 @@ Future<String> _overview(ToolContext context) async {
   final study30 = summarizeStudy(await context.study.statsOnce(from, now));
 
   final accounts = await context.finance.accountsOnce();
-  final deltas = await context.finance.accountDeltasOnce();
-  var totalAssets = 0;
-  for (final account in accounts) {
-    totalAssets += account.balanceInit + (deltas[account.id] ?? 0);
-  }
+  final assetSummary = await context.finance.assetSummaryOnce();
 
   final month = _currentMonth();
   final monthStart = DateTime(now.year, now.month);
@@ -968,7 +1001,10 @@ Future<String> _overview(ToolContext context) async {
       'count': summary.count,
     },
     'assets': {
-      'total_assets_yuan': totalAssets / 100,
+      'total_assets_yuan': assetSummary.totalAssets / 100,
+      'total_liabilities_yuan': assetSummary.liabilityTotal / 100,
+      'net_worth_yuan': assetSummary.netWorth / 100,
+      'investment_profit_yuan': assetSummary.investmentProfit / 100,
       'account_count': accounts.length,
     },
     'budget_this_month': {
@@ -1069,6 +1105,19 @@ Future<Account?> _resolveAccount(
       }(),
   };
 }
+
+/// 解析数值参数：兼容模型偶尔把数字写成字符串（如 "70"、"70kg"、"1,200"）。
+double? _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    final match = RegExp(r'-?\d+(?:\.\d+)?')
+        .firstMatch(value.replaceAll(',', '').trim());
+    if (match != null) return double.tryParse(match.group(0)!);
+  }
+  return null;
+}
+
+int? _asInt(Object? value) => _asDouble(value)?.round();
 
 List<String> _stringList(Object? value) => [
       if (value is List)
