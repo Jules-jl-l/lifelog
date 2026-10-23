@@ -4,7 +4,7 @@
 
 **数据全部存在手机本地**，除 AI 对话与识图外，所有功能完全离线可用。
 
-> 当前版本：**v0.3.0**（`pubspec.yaml`：`0.3.0+1`）
+> 当前版本：**v0.3.1**（`pubspec.yaml`：`0.3.1+1`）
 > 产品与技术方案见 [docs/技术方案.md](docs/技术方案.md)；
 > 当前完成度、已知限制与交接说明见 [docs/项目进度.md](docs/项目进度.md)。
 
@@ -29,9 +29,10 @@
 
 | 版本 | 安装包 | 大小 | 说明 |
 |---|---|---|---|
-| **v0.3.0** | [lifelog-v0.3.0.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.3.0/lifelog-v0.3.0.apk) | 约 67 MB | 当前版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
+| **v0.3.1** | [lifelog-v0.3.1.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.3.1/lifelog-v0.3.1.apk) | 约 67 MB | 当前版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
 
-- 历史版本同样在 [Releases](https://github.com/Jules-jl-l/lifelog/releases) 页面下载；v0.3.0 之前的历史版本不再补打包。
+- 历史版本同样在 [Releases](https://github.com/Jules-jl-l/lifelog/releases) 页面下载。
+- **v0.3.0 的安装包因语音识别缺陷已下架**，请使用 v0.3.1。
 - 支持 **Android 7.0（API 24）及以上**；包含三种 ABI，真机与模拟器都能装。
 - 下载后用文件管理器打开安装；首次安装需允许「安装未知来源应用」。
 - 安装包使用 **debug 签名**，开源自用，直接安装即可。
@@ -92,7 +93,7 @@ LifeLog/
 | JDK | 17（不要用 8） | `D:\apps\Java\jdk-17` |
 | Android SDK | 含 `cmdline-tools` + platform + build-tools | SDK 37.0.0 |
 
-当前状态：`flutter analyze` 无告警，290 个自动化测试通过（测试代码在本地 `testcases/`，不随仓库发布）。
+当前状态：`flutter analyze` 无告警，291 个自动化测试通过（测试代码在本地 `testcases/`，不随仓库发布）。
 
 ### 国内网络下的两个必要适配
 
@@ -156,7 +157,7 @@ cd ios && pod install && cd ..
 open ios/Runner.xcworkspace   # 在 Xcode 选择自己的 Apple ID Team 后运行到设备
 ```
 
-> 首次在 Mac 构建时请验证：Face ID / Touch ID 解锁、按住说话权限与连续识别、
+> 首次在 Mac 构建时请验证：Face ID / Touch ID 解锁、按住说话权限与语音输入、
 > 相册识图、备份与 CSV 分享到「文件」App、TTS 发音、卸载重装后的引导流程，
 > 以及真机上的 SQLite 数据目录读写。
 
@@ -164,9 +165,9 @@ open ios/Runner.xcworkspace   # 在 Xcode 选择自己的 Apple ID Team 后运�
 
 测试用例、自动化脚本与截图属于本地验证资产，已通过 `.gitignore` 排除：
 
-- `testcases/test-cases.md`：266 条用例
+- `testcases/test-cases.md`：267 条用例
 - `testcases/test-report.md`：执行报告、兼容性矩阵、缺陷清单
-- `testcases/automation/`：31 个测试文件 / 290 个测试
+- `testcases/automation/`：31 个测试文件 / 291 个测试
 
 运行方式（`cwd=app/`）：
 
@@ -206,17 +207,42 @@ Get-Process dart, flutter_tester -ErrorAction SilentlyContinue | Stop-Process -F
 
 - 若密钥曾进入历史提交，请**立即到服务商后台轮换该 Key**，再用 `git filter-repo` 清理历史
 
+## 历史变更
+
+### v0.3.1（2026-10-23）
+
+- 修复真机语音**只识别第一句**、或松手提示「没听清」：改为单次识别会话，并在松手后等待最终识别结果再发送
+- 长按语音增加震动反馈：开始拾音中震、进出取消区轻震、松手取消重震
+- **下架 v0.3.0 安装包**：该版本语音存在缺陷，请使用 v0.3.1
+
+### v0.3.0（2026-10-23）
+
+- 完成 iOS 工程适配（权限文案、品牌图标、Podfile、面容 ID、TTS 音频会话、状态栏、Keychain 重装清理），**尚未经过 iOS 真机验证**
+- AI 助手支持删除账户，用户消息也可复制
+- 语音改为松手直接发送
+
+### v0.2.0（2026-10-22）
+
+- 四本内置词库（13,775 词）、拼写 / 听写测验、回收站、CSV 导出
+- 围度综合视图（雷达图 / 六线对比）
+- 资产 / 投资 / 负债三类账户与净资产口径
+
+### v0.1.0（2026-10-20）
+
+- 首个开源版本：财务、健康、学习、AI 助手、主题色、PIN / 生物识别、加密备份
+
 ## 版本与路线
 
 | 版本 | 状态 | 范围 |
 |---|---|---|
 | **v0.1.0** | 历史版本 | 工程骨架 + 财务 + 健康 + 学习 + AI 助手（流式 / Markdown / 语音 / 16 工具 / 识图 / 离线队列）+ 主题色 + PIN / 指纹 + 加密备份；兼容性验证完成 |
 | **v0.2.0** | 历史版本 | 四本内置词库（13,775 词）、拼写 / 听写测验、回收站、CSV 导出、AI 豆包式对话与按住说话、围度综合视图（雷达图 / 六线对比）、资产 / 投资 / 负债三类账户与净资产口径；schema v5 |
-| **v0.3.0** | 当前版本 | iOS 工程适配（**未经 iOS 真机验证**）、语音连续分段与松手直发、AI 删除账户与用户消息复制、iOS TTS 音频会话 / 状态栏 / Keychain 重装清理；290 个自动化测试通过 |
+| **v0.3.0** | 历史版本 | iOS 工程适配（**未经 iOS 真机验证**）、AI 删除账户与用户消息复制、语音松手直发；**安装包已因语音缺陷下架** |
+| **v0.3.1** | 当前版本 | 修复语音只识别第一句 / 松手「没听清」；长按语音震动反馈（开始中震、取消区轻震、取消重震）；291 个自动化测试通过 |
 | **iOS 真机验证** | 待进行 | `app/ios` 工程、权限文案、品牌图标、Podfile（iOS 15.0）已就绪；需 macOS + Xcode 构建并在 iPhone / iPad 上验证 |
 | 后续 | 计划 | iOS 真机验证、ARM64 真机包验证 |
 
-> 版本号以 `app/pubspec.yaml` 的 `version` 为准，当前为 `0.3.0+1`（显示版本 v0.3.0，构建号 1）。
+> 版本号以 `app/pubspec.yaml` 的 `version` 为准，当前为 `0.3.1+1`（显示版本 v0.3.1，构建号 1）。
 
 ## 许可证
 

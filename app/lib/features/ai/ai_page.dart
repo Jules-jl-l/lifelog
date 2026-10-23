@@ -118,11 +118,8 @@ class _AiPageState extends ConsumerState<AiPage> {
           IconButton(
             tooltip: '给助手改名',
             icon: const Icon(Icons.badge_outlined),
-            onPressed: () => openAssistantNameDialog(
-              context,
-              ref,
-              current: assistantName,
-            ),
+            onPressed: () =>
+                openAssistantNameDialog(context, ref, current: assistantName),
           ),
           IconButton(
             tooltip: '上传图片',
@@ -221,7 +218,7 @@ class _AiPageState extends ConsumerState<AiPage> {
     final messages = sessionId == null
         ? const <ChatMessage>[]
         : (ref.watch(chatMessagesProvider(sessionId)).dataOrNull ??
-            const <ChatMessage>[]);
+              const <ChatMessage>[]);
     final draft = _draft;
 
     if (draft == null && messages.isEmpty) return _buildWelcome();
@@ -255,10 +252,7 @@ class _AiPageState extends ConsumerState<AiPage> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.primary,
-                  theme.colorScheme.tertiary,
-                ],
+                colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
               ),
             ),
             child: const Icon(
@@ -284,8 +278,9 @@ class _AiPageState extends ConsumerState<AiPage> {
             alignment: Alignment.centerLeft,
             child: Text(
               '试试这样说',
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -319,8 +314,10 @@ class _AiPageState extends ConsumerState<AiPage> {
               onLongPress: () => _showMessageActions(message, all),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 4),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.of(context).size.width * 0.76,
                 ),
@@ -345,9 +342,7 @@ class _AiPageState extends ConsumerState<AiPage> {
           ),
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: _MessageActionRow(
-              onCopy: () => _copyText(message.content),
-            ),
+            child: _MessageActionRow(onCopy: () => _copyText(message.content)),
           ),
         ],
       );
@@ -362,9 +357,7 @@ class _AiPageState extends ConsumerState<AiPage> {
           children: [
             MarkdownMessage(data: message.content),
             const SizedBox(height: 6),
-            _MessageActionRow(
-              onCopy: () => _copyText(message.content),
-            ),
+            _MessageActionRow(onCopy: () => _copyText(message.content)),
           ],
         ),
       ),
@@ -392,8 +385,9 @@ class _AiPageState extends ConsumerState<AiPage> {
                 const SizedBox(width: 8),
                 Text(
                   '正在思考…',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
               ],
             )
@@ -407,9 +401,8 @@ class _AiPageState extends ConsumerState<AiPage> {
   Future<void> _copyText(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制到剪贴板')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
   }
 
   Future<void> _showMessageActions(
@@ -445,16 +438,15 @@ class _AiPageState extends ConsumerState<AiPage> {
     final text = switch (action) {
       _MessageAction.single => message.content,
       _MessageAction.all => [
-          for (final item in all)
-            '${item.role == 'user' ? '我' : name}：${item.content}',
-        ].join('\n\n'),
+        for (final item in all)
+          '${item.role == 'user' ? '我' : name}：${item.content}',
+      ].join('\n\n'),
     };
 
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制到剪贴板')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
   }
 
   Widget _buildComposer() {
@@ -485,8 +477,9 @@ class _AiPageState extends ConsumerState<AiPage> {
                 children: [
                   IconButton(
                     tooltip: '上传图片',
-                    onPressed:
-                        _sending ? null : () => openReceiptImport(context, ref),
+                    onPressed: _sending
+                        ? null
+                        : () => openReceiptImport(context, ref),
                     icon: const Icon(Icons.add_photo_alternate_outlined),
                   ),
                   Expanded(
@@ -498,10 +491,11 @@ class _AiPageState extends ConsumerState<AiPage> {
                           padding: const EdgeInsets.symmetric(horizontal: 18),
                           decoration: BoxDecoration(
                             color: _recording
-                                ? theme.colorScheme.primary
-                                    .withValues(alpha: 0.12)
+                                ? theme.colorScheme.primary.withValues(
+                                    alpha: 0.12,
+                                  )
                                 : theme.colorScheme.surfaceContainerHighest
-                                    .withValues(alpha: 0.65),
+                                      .withValues(alpha: 0.65),
                             borderRadius: BorderRadius.circular(26),
                           ),
                           child: TextField(
@@ -517,8 +511,9 @@ class _AiPageState extends ConsumerState<AiPage> {
                               ),
                               border: InputBorder.none,
                               isDense: true,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 13),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 13,
+                              ),
                             ),
                             onSubmitted: (_) => _send(),
                           ),
@@ -583,8 +578,9 @@ class _AiPageState extends ConsumerState<AiPage> {
                     ? null
                     : () {
                         _input.text = example;
-                        _input.selection =
-                            TextSelection.collapsed(offset: example.length);
+                        _input.selection = TextSelection.collapsed(
+                          offset: example.length,
+                        );
                       },
               ),
             ),
@@ -608,7 +604,9 @@ class _AiPageState extends ConsumerState<AiPage> {
     try {
       var sessionId = _sessionId;
       if (sessionId == null) {
-        final session = await ref.read(aiRepositoryProvider).createSession(
+        final session = await ref
+            .read(aiRepositoryProvider)
+            .createSession(
               title: service.titleFrom(text),
               model: DeepSeekClient.textModel,
             );
@@ -635,9 +633,8 @@ class _AiPageState extends ConsumerState<AiPage> {
 
       if (!mounted) return;
       if (usedLocalRules) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已使用本地规则（离线兜底）')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已使用本地规则（离线兜底）')));
       } else {
         // 能拿到模型回复说明网络已恢复，顺手把离线队列补做掉
         await _replayQueue();
@@ -672,6 +669,8 @@ class _AiPageState extends ConsumerState<AiPage> {
     // 豆包交互：按住后上滑一定距离松手即取消。
     final armed = details.offsetFromOrigin.dy < -80;
     if (armed == _cancelArmed) return;
+    // 滑入/滑出取消区时各给一次轻点反馈
+    unawaited(HapticFeedback.lightImpact());
     setState(() => _cancelArmed = armed);
   }
 
@@ -695,9 +694,8 @@ class _AiPageState extends ConsumerState<AiPage> {
     if (!mounted) return;
     if (!ready) {
       _holdActive = false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('这台设备暂时用不了语音输入，先用键盘吧')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('这台设备暂时用不了语音输入，先用键盘吧')));
       return;
     }
 
@@ -713,9 +711,8 @@ class _AiPageState extends ConsumerState<AiPage> {
     if (!mounted || session != _voiceSession) return;
     if (!started) {
       _holdActive = false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('没能启动语音识别，请检查麦克风权限')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('没能启动语音识别，请检查麦克风权限')));
       return;
     }
     if (!_holdActive) {
@@ -723,6 +720,8 @@ class _AiPageState extends ConsumerState<AiPage> {
       await speech.cancel();
       return;
     }
+    // 真正开始拾音后再给触感反馈
+    unawaited(HapticFeedback.mediumImpact());
     setState(() {
       _recording = true;
       _cancelArmed = false;
@@ -737,6 +736,7 @@ class _AiPageState extends ConsumerState<AiPage> {
     setState(() => _recording = false);
 
     if (cancel) {
+      unawaited(HapticFeedback.heavyImpact());
       await _cancelVoice();
       return;
     }
@@ -750,9 +750,8 @@ class _AiPageState extends ConsumerState<AiPage> {
     _voiceSession++;
     if (text.isEmpty) {
       _input.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('没听清，请再说一次')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('没听清，请再说一次')));
       return;
     }
 
@@ -838,8 +837,9 @@ class _AiPageState extends ConsumerState<AiPage> {
 
   Widget _buildPendingBanner(List<PendingTask> tasks) {
     final theme = Theme.of(context);
-    final awaiting =
-        tasks.where((task) => task.status == PendingTaskStatus.awaiting).length;
+    final awaiting = tasks
+        .where((task) => task.status == PendingTaskStatus.awaiting)
+        .length;
     final waiting = tasks.length - awaiting;
 
     final parts = <String>[
@@ -867,10 +867,7 @@ class _AiPageState extends ConsumerState<AiPage> {
                 ),
               ),
             ),
-            TextButton(
-              onPressed: _showPendingSheet,
-              child: const Text('查看'),
-            ),
+            TextButton(onPressed: _showPendingSheet, child: const Text('查看')),
             TextButton(
               onPressed: _replaying ? null : _replayQueue,
               child: const Text('重放'),
@@ -887,9 +884,8 @@ class _AiPageState extends ConsumerState<AiPage> {
     try {
       final report = await ref.read(aiQueueWorkerProvider).replayAll();
       if (!mounted || report.isEmpty) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('离线队列：${report.summary}')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('离线队列：${report.summary}')));
     } finally {
       _replaying = false;
     }
@@ -936,8 +932,9 @@ class _PendingTasksSheet extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             '没网时排队的请求会存在这里；联网后自动补做，也可以手动重放。',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.outline),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
           const SizedBox(height: 12),
           if (tasks.isEmpty)
@@ -951,7 +948,8 @@ class _PendingTasksSheet extends ConsumerWidget {
                 shrinkWrap: true,
                 itemCount: tasks.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) => _buildRow(context, ref, tasks[index]),
+                itemBuilder: (context, index) =>
+                    _buildRow(context, ref, tasks[index]),
               ),
             ),
         ],
