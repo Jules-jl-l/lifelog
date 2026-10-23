@@ -20,6 +20,34 @@
 | 安全与备份 | PIN / 指纹解锁、启动免 PIN、AES-256-GCM 加密备份包导出导入 |
 | 数据管理 | **回收站**（恢复 / 彻底删除 / 清空，词库级联）、**CSV 导出**（流水 / 体重 / 围度 / 运动 / 学习 / 测验） |
 
+## 下载安装
+
+### Android
+
+安装包通过 [GitHub Releases](https://github.com/Jules-jl-l/lifelog/releases) 发布，不放进源码仓库（避免仓库体积随版本膨胀）。
+文件名规则为 `lifelog-v<版本>.apk`，按需下载：
+
+| 版本 | 安装包 | 大小 | 说明 |
+|---|---|---|---|
+| **v0.3.0** | [lifelog-v0.3.0.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.3.0/lifelog-v0.3.0.apk) | 约 67 MB | 当前版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
+
+- 历史版本同样在 [Releases](https://github.com/Jules-jl-l/lifelog/releases) 页面下载；v0.3.0 之前的历史版本不再补打包。
+- 支持 **Android 7.0（API 24）及以上**；包含三种 ABI，真机与模拟器都能装。
+- 下载后用文件管理器打开安装；首次安装需允许「安装未知来源应用」。
+- 安装包使用 **debug 签名**，开源自用，直接安装即可。
+- 升级时直接覆盖安装即可，本地数据会保留（数据库版本会自动迁移）。
+
+### iOS
+
+iOS **不提供预编译安装包**。受 Apple 签名机制限制，`.app` / `.ipa` 无法像 APK 一样直接发给普通用户安装，而且必须在 macOS + Xcode 上构建并签名。
+
+因此项目对 iOS 只提供 **源码与构建文档**，需要自行编译安装：
+
+- 构建步骤见下文 [iOS](#ios)。
+- 用免费 Apple ID 即可安装到自己的设备（7 天有效，到期重新签名即可）。
+- 需要 iOS 版的人自行编译安装。
+- 当前 iOS 端**尚未经过真机验证**，暂不建议直接在日常主力机上使用。
+
 ## 技术栈
 
 - **框架**：Flutter 3.47（Dart 3.13），Android + iOS（iOS 工程已配置，**尚未经过 iOS 真机验证**）
@@ -104,12 +132,12 @@ $snap = "D:\apps\flutter\bin\cache\flutter_tools.snapshot"
 
 - 模拟器（x86_64）：`flutter build apk --release --target-platform android-x64`
 - 真机（ARM）：去掉 `--target-platform`，或显式 `android-arm64`
-- 当前 release 包使用 debug 签名（`CN=Android Debug`），**上架或正式分发前必须配置正式签名**
+- 当前 release 包使用 debug 签名（`CN=Android Debug`），直接安装使用即可
 - minSdk 24 / targetSdk 36；已确认 arm64-v8a、armeabi-v7a、x86_64 三套 ABI 与 16KB 页对齐
 
 ### iOS
 
-> ⚠️ **iOS 工程已完成配置，但尚未经过 iOS 真机验证。** 以下内容为代码与工程层面的适配，
+> ⚠️ **iOS 工程已完成配置，但尚未经过 iOS 真机验证。** 本仓库**不提供 iOS 安装包**（`.ipa` / `.app`），只提供源码与构建文档，需要自行在 macOS 上编译并签名。以下内容为代码与工程层面的适配，
 > 需要在 macOS + Xcode 中构建并在 iPhone / iPad 上逐项验证后才能认为 iOS 端可用。
 
 - 工程：`app/ios`，Bundle ID `com.lifelog.lifelog`，部署目标 **iOS 15.0**
@@ -125,7 +153,7 @@ $snap = "D:\apps\flutter\bin\cache\flutter_tools.snapshot"
 cd app
 flutter pub get
 cd ios && pod install && cd ..
-open ios/Runner.xcworkspace   # 在 Xcode 选择 Team / 证书后运行或 Archive
+open ios/Runner.xcworkspace   # 在 Xcode 选择自己的 Apple ID Team 后运行到设备
 ```
 
 > 首次在 Mac 构建时请验证：Face ID / Touch ID 解锁、按住说话权限与连续识别、
@@ -186,7 +214,7 @@ Get-Process dart, flutter_tester -ErrorAction SilentlyContinue | Stop-Process -F
 | **v0.2.0** | 历史版本 | 四本内置词库（13,775 词）、拼写 / 听写测验、回收站、CSV 导出、AI 豆包式对话与按住说话、围度综合视图（雷达图 / 六线对比）、资产 / 投资 / 负债三类账户与净资产口径；schema v5 |
 | **v0.3.0** | 当前版本 | iOS 工程适配（**未经 iOS 真机验证**）、语音连续分段与松手直发、AI 删除账户与用户消息复制、iOS TTS 音频会话 / 状态栏 / Keychain 重装清理；290 个自动化测试通过 |
 | **iOS 真机验证** | 待进行 | `app/ios` 工程、权限文案、品牌图标、Podfile（iOS 15.0）已就绪；需 macOS + Xcode 构建并在 iPhone / iPad 上验证 |
-| 后续 | 计划 | iOS 真机验证、ARM64 真机包验证、CI / 正式签名、App Store 上架准备 |
+| 后续 | 计划 | iOS 真机验证、ARM64 真机包验证 |
 
 > 版本号以 `app/pubspec.yaml` 的 `version` 为准，当前为 `0.3.0+1`（显示版本 v0.3.0，构建号 1）。
 
