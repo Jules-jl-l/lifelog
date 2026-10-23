@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/async_x.dart';
@@ -43,8 +44,7 @@ class _LifeLogAppState extends ConsumerState<LifeLogApp>
       case AppLifecycleState.resumed:
         final since = _backgroundedAt;
         _backgroundedAt = null;
-        if (since != null &&
-            DateTime.now().difference(since) >= relockAfter) {
+        if (since != null && DateTime.now().difference(since) >= relockAfter) {
           _relockIfNeeded();
         }
       case AppLifecycleState.inactive:
@@ -64,7 +64,8 @@ class _LifeLogAppState extends ConsumerState<LifeLogApp>
   @override
   Widget build(BuildContext context) {
     final status = ref.watch(lockStatusProvider);
-    final accent = ref.watch(themeAccentProvider).dataOrNull ?? ThemeAccent.green;
+    final accent =
+        ref.watch(themeAccentProvider).dataOrNull ?? ThemeAccent.green;
 
     return MaterialApp(
       title: '朝夕册',
@@ -87,17 +88,22 @@ class _Splash extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            if (message != null) ...[
-              const SizedBox(height: 16),
-              Text(message!),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              if (message != null) ...[
+                const SizedBox(height: 16),
+                Text(message!),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

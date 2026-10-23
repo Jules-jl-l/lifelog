@@ -175,7 +175,7 @@ class SettingsPage extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              '朝夕册 v0.2.0 · 数据只有本机一份，请定期导出备份。',
+              '朝夕册 v0.3.0 · 数据只有本机一份，请定期导出备份。',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.outline),
             ),

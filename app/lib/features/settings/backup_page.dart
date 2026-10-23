@@ -148,6 +148,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
           files: [XFile(file.path)],
           subject: '朝夕册 加密备份包',
           text: '请连同备份密码一起妥善保存；数据只在本机，这份备份是唯一的兜底。',
+          // iPad 上分享面板以 popover 呈现，必须给出锚点
+          sharePositionOrigin: _shareOrigin(context),
         ),
       );
     } catch (error) {
@@ -155,6 +157,14 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Rect _shareOrigin(BuildContext context) {
+    final box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    return const Rect.fromLTWH(0, 0, 1, 1);
   }
 
   Future<void> _import() async {

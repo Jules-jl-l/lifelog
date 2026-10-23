@@ -11,7 +11,7 @@ import 'package:cryptography/cryptography.dart';
 
 /// PIN 的派生次数。
 ///
-/// PIN 只有 4-8 位，真正的防护来自 Android Keystore 与校验失败次数限制；
+/// PIN 只有 4-8 位，真正的防护来自 Android Keystore / iOS Keychain 与校验失败次数限制；
 /// 而纯 Dart 的 PBKDF2 要兼顾解锁速度，所以这里取较小值。
 const pinKdfIterations = 20000;
 

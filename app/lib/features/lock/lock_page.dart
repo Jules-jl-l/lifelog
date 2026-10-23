@@ -1,6 +1,7 @@
 /// 锁屏：首次进入引导设置 PIN，之后每次冷启动校验 PIN。
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +37,11 @@ class _LockPageState extends ConsumerState<LockPage> {
     super.dispose();
   }
 
-  /// 检测指纹/面容是否可用；已设 PIN 时自动拉起一次验证。
+  /// iOS 使用面容 ID / Touch ID，Android 使用指纹，文案随平台切换。
+  String get _biometricName =>
+      defaultTargetPlatform == TargetPlatform.iOS ? '面容 ID' : '指纹';
+
+  /// 检测生物识别是否可用；已设 PIN 时自动拉起一次验证。
   Future<void> _prepareBiometric() async {
     final service = ref.read(biometricServiceProvider);
     final hasPin = await ref.read(hasPinProvider.future);
@@ -55,7 +60,7 @@ class _LockPageState extends ConsumerState<LockPage> {
     });
     final ok = await ref
         .read(biometricServiceProvider)
-        .authenticate(reason: '验证指纹以解锁朝夕册');
+        .authenticate(reason: '验证$_biometricName以解锁朝夕册');
     if (!mounted) return;
     if (ok) {
       ref.read(lockStatusProvider.notifier).unlock();
@@ -63,7 +68,7 @@ class _LockPageState extends ConsumerState<LockPage> {
     }
     setState(() {
       _busy = false;
-      _error = '指纹验证未通过，请输入 PIN 解锁';
+      _error = '$_biometricName验证未通过，请输入 PIN 解锁';
     });
   }
 
@@ -130,101 +135,114 @@ class _LockPageState extends ConsumerState<LockPage> {
     final hasPinAsync = ref.watch(hasPinProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: hasPinAsync.when(
-                loading: () => const CircularProgressIndicator(),
-                error: (error, _) => Text('无法读取本地安全存储：$error'),
-                data: (hasPin) => Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(
-                        'assets/branding/app_icon.png',
-                        width: 76,
-                        height: 76,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // 锁屏没有 AppBar，iOS / Android 深色模式需显式指定状态栏图标颜色
+      value: theme.brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: hasPinAsync.when(
+                  loading: () => const CircularProgressIndicator(),
+                  error: (error, _) => Text('无法读取本地安全存储：$error'),
+                  data: (hasPin) => Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Image.asset(
+                          'assets/branding/app_icon.png',
+                          width: 76,
+                          height: 76,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '朝夕册',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _subtitle(hasPin),
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.outline),
-                    ),
-                    const SizedBox(height: 28),
-                    TextField(
-                      controller: _controller,
-                      autofocus: true,
-                      obscureText: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(8),
-                      ],
-                      textAlign: TextAlign.center,
-                      decoration: const InputDecoration(
-                        labelText: 'PIN 码',
-                        hintText: '4-8 位数字',
-                        counterText: '',
-                      ),
-                      onSubmitted: (_) => _submit(hasPin),
-                    ),
-                    if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(
-                        _error!,
+                        '朝夕册',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: theme.colorScheme.error),
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ],
-                    if (hasPin && _failures >= 3) ...[
                       const SizedBox(height: 8),
                       Text(
-                        '已连续输错 $_failures 次',
+                        _subtitle(hasPin),
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: theme.colorScheme.outline),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
-                    ],
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _busy ? null : () => _submit(hasPin),
-                      child: Text(
-                        hasPin
-                            ? '解锁'
-                            : (_firstEntry == null ? '设置 PIN' : '确认 PIN'),
+                      const SizedBox(height: 28),
+                      TextField(
+                        controller: _controller,
+                        autofocus: true,
+                        obscureText: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(8),
+                        ],
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(
+                          labelText: 'PIN 码',
+                          hintText: '4-8 位数字',
+                          counterText: '',
+                        ),
+                        onSubmitted: (_) => _submit(hasPin),
                       ),
-                    ),
-                    if (hasPin && _biometricAvailable) ...[
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                      ],
+                      if (hasPin && _failures >= 3) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '已连续输错 $_failures 次',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.colorScheme.outline),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: _busy ? null : () => _submit(hasPin),
+                        child: Text(
+                          hasPin
+                              ? '解锁'
+                              : (_firstEntry == null ? '设置 PIN' : '确认 PIN'),
+                        ),
+                      ),
+                      if (hasPin && _biometricAvailable) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _authenticateBiometric,
+                          icon: Icon(
+                            defaultTargetPlatform == TargetPlatform.iOS
+                                ? Icons.face
+                                : Icons.fingerprint,
+                          ),
+                          label: Text('$_biometricName解锁'),
+                        ),
+                      ],
                       const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _busy ? null : _authenticateBiometric,
-                        icon: const Icon(Icons.fingerprint),
-                        label: const Text('指纹解锁'),
+                      Text(
+                        '数据只保存在本机，PIN 用于防止他人翻看；忘记 PIN 只能清空数据重来。',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 12),
-                    Text(
-                      '数据只保存在本机，PIN 用于防止他人翻看；忘记 PIN 只能清空数据重来。',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

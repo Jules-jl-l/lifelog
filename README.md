@@ -4,7 +4,7 @@
 
 **数据全部存在手机本地**，除 AI 对话与识图外，所有功能完全离线可用。
 
-> 当前版本：**v0.2.0**（`pubspec.yaml`：`0.2.0+1`）
+> 当前版本：**v0.3.0**（`pubspec.yaml`：`0.3.0+1`）
 > 产品与技术方案见 [docs/技术方案.md](docs/技术方案.md)；
 > 当前完成度、已知限制与交接说明见 [docs/项目进度.md](docs/项目进度.md)。
 
@@ -15,14 +15,14 @@
 | 财务管理 | 分类记账、转账、**资产 / 投资 / 负债三类账户**与净资产、投资市值与盈亏、月度预算、**周 / 月 / 年账单**（横滑周期条）、收支趋势与分类占比、收支排行、流水筛选、**支付截图识图记账** |
 | 健康管理 | 体重 / 体脂、多部位围度（**综合 2×3 视图 + 雷达图 / 六线对比**）、运动记录、周 / 月 / 年趋势对比、BMI |
 | 外语学习 | 内置 **CET-4 / CET-6 / 考研英语 / IT 行业必备词汇** 四本词库（共 13,775 词）、间隔重复（SRS）背词、**看释义拼写 / 听音拼写测验**、词库批量导入、TTS 发音、学习与测验统计 |
-| AI 助手 | 「小朝」多轮对话、流式输出、Markdown 渲染、**按住说话**、16 个 Function Calling 工具读写本地数据、识图草稿 |
+| AI 助手 | 「小朝」多轮对话、流式输出、Markdown 渲染、**按住说话（松手直接发送）**、17 个 Function Calling 工具读写本地数据（含删除账户）、识图草稿、用户与助手消息均可复制 |
 | 外观 | 6 种主题色（晨绿 / 海蓝 / 靛紫 / 暖橙 / 玫红 / 青碧），即时生效并持久化，跟随系统深色模式 |
 | 安全与备份 | PIN / 指纹解锁、启动免 PIN、AES-256-GCM 加密备份包导出导入 |
 | 数据管理 | **回收站**（恢复 / 彻底删除 / 清空，词库级联）、**CSV 导出**（流水 / 体重 / 围度 / 运动 / 学习 / 测验） |
 
 ## 技术栈
 
-- **框架**：Flutter 3.47（Dart 3.13），单端 Android
+- **框架**：Flutter 3.47（Dart 3.13），Android + iOS（iOS 工程已配置，**尚未经过 iOS 真机验证**）
 - **本地存储**：Drift（SQLite），无服务端、无账号体系
 - **状态管理**：Riverpod 3（导航使用原生 Navigator）
 - **图表**：fl_chart；**Markdown**：flutter_markdown_plus；**语音**：speech_to_text
@@ -50,7 +50,8 @@ LifeLog/
 │  │  └─ shared/           # 图表、统计卡、周期横滑条
 │  ├─ assets/branding/
 │  ├─ assets/wordlists/     # CET-4 / CET-6 / 考研 / IT 四本词库 JSON
-│  └─ android/
+│  ├─ android/
+│  └─ ios/                  # iOS 工程（Bundle ID com.lifelog.lifelog，iOS 15.0）
 ├─ testcases/              # 本地维护的用例与自动化（已忽略，不入库）
 └─ .verify/                # 本地测试截图（已忽略，不入库）
 ```
@@ -63,7 +64,7 @@ LifeLog/
 | JDK | 17（不要用 8） | `D:\apps\Java\jdk-17` |
 | Android SDK | 含 `cmdline-tools` + platform + build-tools | SDK 37.0.0 |
 
-当前状态：`flutter analyze` 无告警，286 个自动化测试通过（测试代码在本地 `testcases/`，不随仓库发布）。
+当前状态：`flutter analyze` 无告警，290 个自动化测试通过（测试代码在本地 `testcases/`，不随仓库发布）。
 
 ### 国内网络下的两个必要适配
 
@@ -97,7 +98,7 @@ $snap = "D:\apps\flutter\bin\cache\flutter_tools.snapshot"
 ```
 
 首次运行后，进入「我的 → DeepSeek API Key」填写自己的 **DeepSeek API Key**
-（只存本机 Android Keystore，不写入代码、不进入仓库）。未配置时 AI 降级为本地规则记账。
+（只存本机 Android Keystore / iOS Keychain，不写入代码、不进入仓库）。未配置时 AI 降级为本地规则记账。
 
 ### 打包说明
 
@@ -106,13 +107,38 @@ $snap = "D:\apps\flutter\bin\cache\flutter_tools.snapshot"
 - 当前 release 包使用 debug 签名（`CN=Android Debug`），**上架或正式分发前必须配置正式签名**
 - minSdk 24 / targetSdk 36；已确认 arm64-v8a、armeabi-v7a、x86_64 三套 ABI 与 16KB 页对齐
 
+### iOS
+
+> ⚠️ **iOS 工程已完成配置，但尚未经过 iOS 真机验证。** 以下内容为代码与工程层面的适配，
+> 需要在 macOS + Xcode 中构建并在 iPhone / iPad 上逐项验证后才能认为 iOS 端可用。
+
+- 工程：`app/ios`，Bundle ID `com.lifelog.lifelog`，部署目标 **iOS 15.0**
+- 显示名「朝夕册」；已配置 `NSFaceIDUsageDescription`、`NSMicrophoneUsageDescription`、
+  `NSSpeechRecognitionUsageDescription`、`NSPhotoLibraryUsageDescription`
+- AppIcon 已替换为品牌图标；iPad 分享面板已补 `sharePositionOrigin` 锚点
+- 锁屏在 iOS 上显示「面容 ID 解锁」；TTS 使用 `playback` 音频会话（静音开关下也能发音）
+- 深色模式锁屏 / 启动页已显式设置状态栏图标颜色
+- 卸载重装时按安装标记清理 Keychain 残留 PIN / API Key（老版本升级会保留原凭据）
+- 需要在 **macOS + Xcode** 上构建（Windows 无法编译 iOS）：
+
+```bash
+cd app
+flutter pub get
+cd ios && pod install && cd ..
+open ios/Runner.xcworkspace   # 在 Xcode 选择 Team / 证书后运行或 Archive
+```
+
+> 首次在 Mac 构建时请验证：Face ID / Touch ID 解锁、按住说话权限与连续识别、
+> 相册识图、备份与 CSV 分享到「文件」App、TTS 发音、卸载重装后的引导流程，
+> 以及真机上的 SQLite 数据目录读写。
+
 ## 测试
 
 测试用例、自动化脚本与截图属于本地验证资产，已通过 `.gitignore` 排除：
 
-- `testcases/test-cases.md`：264 条用例
+- `testcases/test-cases.md`：266 条用例
 - `testcases/test-report.md`：执行报告、兼容性矩阵、缺陷清单
-- `testcases/automation/`：31 个测试文件 / 286 个测试
+- `testcases/automation/`：31 个测试文件 / 290 个测试
 
 运行方式（`cwd=app/`）：
 
@@ -132,7 +158,7 @@ Get-Process dart, flutter_tester -ErrorAction SilentlyContinue | Stop-Process -F
 - 数据只存在手机本地 SQLite，不经过任何自建服务端，也不上传第三方
 - 支持 PIN / 指纹解锁；后台超过 5 分钟回前台需重新解锁
 - 支持**导出 / 导入加密备份包**（自设密码），换机时用它迁移
-- PIN 与 API Key 不在备份包内（存 Android Keystore），换机后需重新设置
+- PIN 与 API Key 不在备份包内（存 Android Keystore / iOS Keychain），换机后需重新设置
 
 > ⚠️ **数据只有一份，请定期导出备份。** 换机、丢机或误删且无备份时无法找回；
 > 备份密码一旦遗忘，备份包也无法解开。
@@ -141,7 +167,7 @@ Get-Process dart, flutter_tester -ErrorAction SilentlyContinue | Stop-Process -F
 
 仓库中**不包含任何真实凭据与个人数据**：
 
-- DeepSeek API Key 由使用者在 App 内自行填写，存 `flutter_secure_storage`（Android Keystore）
+- DeepSeek API Key 由使用者在 App 内自行填写，存 `flutter_secure_storage`（Android Keystore / iOS Keychain）
 - 签名文件（`*.jks` / `*.keystore` / `key.properties`）、`.env`、本地数据库与备份包均已排除
 - 测试用例与截图（`testcases/`、`.verify/`）仅在本地保留，不进入仓库
 - 提交前由 `pre-commit` 钩子运行 `scripts/scan_secrets.py` 拦截疑似真实密钥：
@@ -157,10 +183,12 @@ Get-Process dart, flutter_tester -ErrorAction SilentlyContinue | Stop-Process -F
 | 版本 | 状态 | 范围 |
 |---|---|---|
 | **v0.1.0** | 历史版本 | 工程骨架 + 财务 + 健康 + 学习 + AI 助手（流式 / Markdown / 语音 / 16 工具 / 识图 / 离线队列）+ 主题色 + PIN / 指纹 + 加密备份；兼容性验证完成 |
-| **v0.2.0** | 当前版本 | 四本内置词库（13,775 词）、拼写 / 听写测验、回收站、CSV 导出、AI 豆包式对话与按住说话、围度综合视图（雷达图 / 六线对比）、资产 / 投资 / 负债三类账户与净资产口径；schema v5；286 个自动化测试通过 |
-| 后续 | 计划 | **iOS 适配**、ARM64 真机包验证、CI / 正式签名 |
+| **v0.2.0** | 历史版本 | 四本内置词库（13,775 词）、拼写 / 听写测验、回收站、CSV 导出、AI 豆包式对话与按住说话、围度综合视图（雷达图 / 六线对比）、资产 / 投资 / 负债三类账户与净资产口径；schema v5 |
+| **v0.3.0** | 当前版本 | iOS 工程适配（**未经 iOS 真机验证**）、语音连续分段与松手直发、AI 删除账户与用户消息复制、iOS TTS 音频会话 / 状态栏 / Keychain 重装清理；290 个自动化测试通过 |
+| **iOS 真机验证** | 待进行 | `app/ios` 工程、权限文案、品牌图标、Podfile（iOS 15.0）已就绪；需 macOS + Xcode 构建并在 iPhone / iPad 上验证 |
+| 后续 | 计划 | iOS 真机验证、ARM64 真机包验证、CI / 正式签名、App Store 上架准备 |
 
-> 版本号以 `app/pubspec.yaml` 的 `version` 为准，当前为 `0.2.0+1`（显示版本 v0.2.0，构建号 1）。
+> 版本号以 `app/pubspec.yaml` 的 `version` 为准，当前为 `0.3.0+1`（显示版本 v0.3.0，构建号 1）。
 
 ## 许可证
 

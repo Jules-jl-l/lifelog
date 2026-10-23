@@ -90,6 +90,14 @@ class _ExportPageState extends ConsumerState<ExportPage> {
         ExportKind.quiz => '每次测验的词库、模式、题数、正确率',
       };
 
+  Rect _shareOrigin(BuildContext context) {
+    final box = context.findRenderObject();
+    if (box is RenderBox && box.hasSize) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    return const Rect.fromLTWH(0, 0, 1, 1);
+  }
+
   Future<void> _export() async {
     setState(() {
       _busy = true;
@@ -111,6 +119,8 @@ class _ExportPageState extends ConsumerState<ExportPage> {
           files: [for (final file in files) XFile(file.path)],
           subject: '朝夕册 CSV 导出',
           text: '朝夕册导出的 CSV 数据（UTF-8）。',
+          // iPad 上分享面板以 popover 呈现，必须给出锚点
+          sharePositionOrigin: _shareOrigin(context),
         ),
       );
     } catch (error) {

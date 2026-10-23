@@ -1,6 +1,6 @@
 /// DeepSeek API Key 配置弹窗。
 ///
-/// Key 只写入本机安全存储（Android Keystore），界面只显示掩码，不回显完整值。
+/// Key 只写入本机安全存储（Android Keystore / iOS Keychain），界面只显示掩码，不回显完整值。
 library;
 
 import 'package:flutter/material.dart';

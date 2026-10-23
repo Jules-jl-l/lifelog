@@ -55,11 +55,7 @@ class _AiPageState extends ConsumerState<AiPage> {
   bool _recording = false;
   bool _cancelArmed = false;
 
-  /// 松开后等待系统返回最终识别结果。
-  bool _voicePendingFinal = false;
-  Timer? _finalTimer;
-
-  /// 每次录音的会话号；取消后自增，丢弃迟到的识别回调。
+  /// 每次录音的会话号；取消或发送后自增，丢弃迟到的识别回调。
   int _voiceSession = 0;
 
   /// 页面用过语音输入时记下实现，dispose 里用它停止拾音。
@@ -74,7 +70,6 @@ class _AiPageState extends ConsumerState<AiPage> {
 
   @override
   void dispose() {
-    _finalTimer?.cancel();
     if (_recording) {
       unawaited(_speech?.cancel() ?? Future<void>.value());
     }
@@ -315,34 +310,46 @@ class _AiPageState extends ConsumerState<AiPage> {
 
     // 豆包式布局：用户消息是右侧蓝色气泡，助手回复直接平铺在背景上。
     if (message.role == 'user') {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: GestureDetector(
-          onLongPress: () => _showMessageActions(message, all),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 18),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.76,
-            ),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(6),
-              ),
-            ),
-            child: Text(
-              message.content,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onPrimary,
-                height: 1.45,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onLongPress: () => _showMessageActions(message, all),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.76,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(6),
+                  ),
+                ),
+                child: Text(
+                  message.content,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onPrimary,
+                    height: 1.45,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _MessageActionRow(
+              onCopy: () => _copyText(message.content),
+            ),
+          ),
+        ],
       );
     }
 
@@ -355,7 +362,7 @@ class _AiPageState extends ConsumerState<AiPage> {
           children: [
             MarkdownMessage(data: message.content),
             const SizedBox(height: 6),
-            _AssistantActionRow(
+            _MessageActionRow(
               onCopy: () => _copyText(message.content),
             ),
           ],
@@ -697,13 +704,6 @@ class _AiPageState extends ConsumerState<AiPage> {
     final started = await speech.start(
       onResult: (text, isFinal) {
         if (!mounted || session != _voiceSession) return;
-        if (isFinal) {
-          _voicePendingFinal = false;
-          _finalTimer?.cancel();
-        } else if (!_recording && !_voicePendingFinal) {
-          // 已经取消或已结束，忽略迟到的中间结果
-          return;
-        }
         if (text.isEmpty) return;
         _input.text = text;
         _input.selection = TextSelection.collapsed(offset: text.length);
@@ -729,7 +729,7 @@ class _AiPageState extends ConsumerState<AiPage> {
     });
   }
 
-  /// 松开手指：未上滑则确认输入，上滑则取消。
+  /// 松开手指：未上滑则结束识别并直接发送，上滑则取消。
   Future<void> _endVoiceHold() async {
     final cancel = _cancelArmed;
     _holdActive = false;
@@ -741,12 +741,24 @@ class _AiPageState extends ConsumerState<AiPage> {
       return;
     }
 
-    _voicePendingFinal = true;
-    _finalTimer?.cancel();
-    _finalTimer = Timer(const Duration(seconds: 3), () {
-      _voicePendingFinal = false;
-    });
+    // stop() 返回前会把最后一段识别结果定稿写入输入框
     await _speech?.stop();
+    if (!mounted) return;
+
+    final text = _input.text.trim();
+    // 让迟到的识别回调失效，避免发送后又把旧文字写回输入框
+    _voiceSession++;
+    if (text.isEmpty) {
+      _input.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没听清，请再说一次')),
+      );
+      return;
+    }
+
+    _input.text = text;
+    _input.selection = TextSelection.collapsed(offset: text.length);
+    await _send();
   }
 
   /// 取消本轮语音输入，丢弃已识别的文字与迟到的结果。
@@ -754,8 +766,6 @@ class _AiPageState extends ConsumerState<AiPage> {
     _voiceSession++;
     _holdActive = false;
     _cancelArmed = false;
-    _voicePendingFinal = false;
-    _finalTimer?.cancel();
     if (_recording) setState(() => _recording = false);
     _input.clear();
     await _speech?.cancel();
@@ -1029,9 +1039,9 @@ class _SuggestionChip extends StatelessWidget {
   }
 }
 
-/// 助手回复下方的轻量操作栏（目前提供复制）。
-class _AssistantActionRow extends StatelessWidget {
-  const _AssistantActionRow({required this.onCopy});
+/// 消息下方的轻量操作栏（目前提供复制），用户与助手消息共用。
+class _MessageActionRow extends StatelessWidget {
+  const _MessageActionRow({required this.onCopy});
 
   final VoidCallback onCopy;
 

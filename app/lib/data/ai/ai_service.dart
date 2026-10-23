@@ -29,6 +29,7 @@ const _writeToolNames = <String>{
   'create_transaction',
   'create_transfer',
   'create_account',
+  'delete_account',
   'set_budget',
   'create_weight_record',
   'create_measure_record',
@@ -41,11 +42,11 @@ const _writeToolNames = <String>{
 ///
 /// 只用于兜底校验：命中后若模型没有调用任何工具，会补一轮强制提示。
 final _writeIntentPattern = RegExp(
-  r'(记录|记一下|记下|帮我记|记好|记账|添加|新增|加入|加到|设置|设为|改成|存入|转到|转给|转账|新建|创建)'
+  r'(记录|记一下|记下|帮我记|记好|记账|添加|新增|加入|加到|设置|设为|改成|存入|转到|转给|转账|新建|创建|删除|删掉|删了|移除)'
   r'|(预算|身高|体重|围度|腰围|体脂|跑步|运动)[^\d\n]{0,4}\d',
 );
 final _englishWriteVerbPattern = RegExp(
-  r'\b(record|log|save|add|set|create|transfer)\b',
+  r'\b(record|log|save|add|set|create|transfer|delete|remove)\b',
   caseSensitive: false,
 );
 

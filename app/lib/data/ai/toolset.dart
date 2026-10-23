@@ -141,6 +141,22 @@ const aiToolSpecs = <Map<String, dynamic>>[
   {
     'type': 'function',
     'function': {
+      'name': 'delete_account',
+      'description':
+          '删除一个账户（移入回收站，可在回收站恢复）。用户说“把招商银行账户删掉”“不要花呗这个账户了”时调用；'
+          '删除前先用 list_accounts 确认账户名，账户名不明确时不要猜。',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'name': {'type': 'string', 'description': '要删除的账户名称或银行卡后四位'},
+        },
+        'required': ['name'],
+      },
+    },
+  },
+  {
+    'type': 'function',
+    'function': {
       'name': 'list_categories',
       'description': '列出收支分类；不确定用户说的分类是否存在时先查一下。',
       'parameters': {
@@ -368,6 +384,7 @@ Future<String> runTool(ToolCall call, ToolContext context) async {
       'query_expense' => await _queryExpense(call.arguments, context),
       'list_accounts' => await _listAccounts(context),
       'create_account' => await _createAccount(call.arguments, context),
+      'delete_account' => await _deleteAccount(call.arguments, context),
       'list_categories' => await _listCategories(call.arguments, context),
       'set_budget' => await _setBudget(call.arguments, context),
       'query_budget' => await _queryBudget(call.arguments, context),
@@ -588,6 +605,26 @@ Future<String> _createAccount(
     'summary': '已创建${type.label}账户「$name」'
         '${initCents == 0 ? '' : '，$amountLabel ¥${formatCents(initCents)}'}',
     'account_id': id,
+  });
+}
+
+Future<String> _deleteAccount(
+  Map<String, dynamic> args,
+  ToolContext context,
+) async {
+  final name = (args['name'] as String?)?.trim();
+  if (name == null || name.isEmpty) return _fail('缺少要删除的账户名称');
+
+  final accounts = await context.finance.accountsOnce();
+  final account = await _resolveAccount(name, accounts);
+  if (account == null) {
+    return _fail('没有找到账户「$name」，可以先调用 list_accounts 确认账户名');
+  }
+
+  await context.finance.deleteAccount(account.id);
+  return _ok({
+    'summary': '已删除账户「${account.name}」，可在回收站恢复',
+    'account_id': account.id,
   });
 }
 

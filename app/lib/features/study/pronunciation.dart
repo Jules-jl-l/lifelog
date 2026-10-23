@@ -1,6 +1,7 @@
 /// 单词发音：调用系统 TTS 引擎，离线可用，不需要下载音频文件。
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -17,6 +18,19 @@ class PronunciationService {
     await _tts.setSpeechRate(0.45);
     await _tts.setVolume(1);
     await _tts.setPitch(1);
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // iOS 默认是 ambientSolo，静音开关打开时听不到发音；
+      // 学习场景点发音按钮应直接出声，因此切到 playback 并压低其它音频。
+      try {
+        await _tts.setSharedInstance(true);
+        await _tts.setIosAudioCategory(IosTextToSpeechAudioCategory.playback, [
+          IosTextToSpeechAudioCategoryOptions.duckOthers,
+          IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+        ]);
+      } on Object {
+        // 音频会话设置失败不影响朗读本身
+      }
+    }
     _configured = true;
   }
 
@@ -58,11 +72,7 @@ final pronunciationProvider = Provider<PronunciationService>((ref) {
 
 /// 发音按钮；[american] 为 false 时读英式发音。
 class PronounceButton extends ConsumerWidget {
-  const PronounceButton({
-    super.key,
-    required this.text,
-    this.american = true,
-  });
+  const PronounceButton({super.key, required this.text, this.american = true});
 
   final String text;
   final bool american;
