@@ -35,12 +35,16 @@ class AssetFlow {
     required this.amount,
     this.accountId,
     this.toAccountId,
+    this.occurredAt,
   });
 
   final TxnKind kind;
   final int amount;
   final String? accountId;
   final String? toAccountId;
+
+  /// 发生时间；资产历史统计用它回溯每个周期末的净资产。
+  final DateTime? occurredAt;
 }
 
 /// 单个账户的计算结果。

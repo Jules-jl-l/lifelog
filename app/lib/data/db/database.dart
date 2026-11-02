@@ -28,6 +28,7 @@ part 'database.g.dart';
   Words,
   ReviewRecords,
   StudyStats,
+  StudySessions,
   QuizSessions,
   QuizAnswers,
   ChatSessions,
@@ -43,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -78,6 +79,10 @@ class AppDatabase extends _$AppDatabase {
               "AND to_account_id IS NULL "
               "AND note LIKE '转入：%'",
             );
+          }
+          // v5 -> v6：学习计时（开始 / 结束学习）
+          if (from < 6) {
+            await m.createTable(studySessions);
           }
         },
         beforeOpen: (details) async {

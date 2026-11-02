@@ -81,7 +81,7 @@ class _CategoryEditorPageState extends ConsumerState<CategoryEditorPage> {
             autofocus: !_editing,
             decoration: const InputDecoration(
               labelText: '分类名称',
-              hintText: '例如：餐饮、交通、工资',
+              hintText: '必填',
             ),
           ),
           const SizedBox(height: 20),

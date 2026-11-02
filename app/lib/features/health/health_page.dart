@@ -361,8 +361,16 @@ class _MeasureTabState extends ConsumerState<MeasureTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final entries = ref.watch(measureEntriesProvider(widget.range)).dataOrNull ??
-        const <MeasureEntry>[];
+    final rawEntries =
+        ref.watch(measureEntriesProvider(widget.range)).dataOrNull ??
+            const <MeasureEntry>[];
+    // 已下线的部位（颈围）不再出现在围度视图与记录列表里
+    final entries = rawEntries
+        .where(
+          (entry) => !removedMeasureParts
+              .contains(canonicalMeasurePart(entry.part)),
+        )
+        .toList();
     final chips = measureChipParts(entries);
     final selected = chips.contains(_selected) ? _selected : measureOverview;
     final isOverview = selected == measureOverview;

@@ -134,7 +134,6 @@ class _WordImportSheetState extends ConsumerState<WordImportSheet> {
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               decoration: const InputDecoration(
                 labelText: '粘贴内容（CSV / TXT / JSON）',
-                hintText: 'apple, /ˈæpl/, n. 苹果',
               ),
             ),
             if (_sourceLabel != null) ...[

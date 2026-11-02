@@ -2,13 +2,13 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/async_x.dart';
 import '../../core/utils.dart';
 import '../../data/db/database.dart';
 import '../../data/providers.dart';
+import '../../shared/amount_calculator_sheet.dart';
 import 'account_editor_page.dart';
 import 'account_meta.dart';
 import 'category_editor_page.dart';
@@ -80,6 +80,18 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
     final kindCategories =
         categories.where((item) => item.kind == _kind).toList();
 
+    final suggestionKey = (kind: _kind, categoryId: _categoryId ?? '');
+    final payeeSuggestions = _categoryId == null
+        ? const <String>[]
+        : ref
+                .watch(payeeSuggestionsProvider(suggestionKey))
+                .dataOrNull ??
+            const <String>[];
+    final noteSuggestions = _categoryId == null
+        ? const <String>[]
+        : ref.watch(noteSuggestionsProvider(suggestionKey)).dataOrNull ??
+            const <String>[];
+
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -132,16 +144,18 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
             const SizedBox(height: 16),
             TextField(
               controller: _amount,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-              ],
+              readOnly: true,
+              onTap: _saving ? null : _editAmount,
               style: theme.textTheme.headlineSmall,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '金额',
                 prefixText: '¥ ',
-                hintText: '0.00',
+                hintText: '必填',
+                suffixIcon: IconButton(
+                  tooltip: '金额计算',
+                  onPressed: _saving ? null : _editAmount,
+                  icon: const Icon(Icons.calculate_outlined),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -259,15 +273,32 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
               controller: _payee,
               decoration: const InputDecoration(
                 labelText: '商户 / 对方',
-                hintText: '例如：食堂、地铁',
+                hintText: '选填',
               ),
             ),
+            if (payeeSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _SuggestionChips(
+                values: payeeSuggestions,
+                onSelected: (value) => _fill(_payee, value),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _note,
               maxLines: 2,
-              decoration: const InputDecoration(labelText: '备注'),
+              decoration: const InputDecoration(
+                labelText: '备注',
+                hintText: '选填',
+              ),
             ),
+            if (noteSuggestions.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _SuggestionChips(
+                values: noteSuggestions,
+                onSelected: (value) => _fill(_note, value),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _saving ? null : _save,
@@ -302,6 +333,25 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
         time?.hour ?? _occurredAt.hour,
         time?.minute ?? _occurredAt.minute,
       );
+    });
+  }
+
+  Future<void> _editAmount() async {
+    final value = await showAmountCalculator(
+      context,
+      initialValue: _amount.text,
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      _amount.text = value;
+      _amount.selection = TextSelection.collapsed(offset: value.length);
+    });
+  }
+
+  void _fill(TextEditingController controller, String value) {
+    setState(() {
+      controller.text = value;
+      controller.selection = TextSelection.collapsed(offset: value.length);
     });
   }
 
@@ -382,5 +432,41 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
   void _notify(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+/// 输入框下方的历史常用值胶囊，点击直接填入。
+class _SuggestionChips extends StatelessWidget {
+  const _SuggestionChips({required this.values, required this.onSelected});
+
+  final List<String> values;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '历史常用',
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final value in values)
+              ActionChip(
+                label: Text(value),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => onSelected(value),
+              ),
+          ],
+        ),
+      ],
+    );
   }
 }

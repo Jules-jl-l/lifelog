@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/db/database.dart';
 
-/// 列表展示名：有卡号尾号时显示为「招商银行(0137)」。
+/// 列表展示名：有卡号尾号时显示为「银行名称(后四位)」。
 String accountDisplayName(Account account) {
   final last4 = account.cardLast4;
   if (last4 == null || last4.isEmpty) return account.name;

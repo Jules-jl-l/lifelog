@@ -26,7 +26,7 @@ const aiToolSpecs = <Map<String, dynamic>>[
     'type': 'function',
     'function': {
       'name': 'create_transaction',
-      'description': '记录一笔收入或支出。用户说“午饭花了 30”“工资到账 8000，存进储蓄卡0137”时调用。',
+      'description': '记录一笔收入或支出。用户说“午饭花了 30”“工资到账 8000，存进储蓄卡”时调用。',
       'parameters': {
         'type': 'object',
         'properties': {
@@ -42,7 +42,7 @@ const aiToolSpecs = <Map<String, dynamic>>[
           },
           'account': {
             'type': 'string',
-            'description': '账户名或银行卡后四位，例如 微信 / 支付宝 / 0137；省略用默认账户',
+            'description': '账户名或银行卡后四位，例如 微信 / 支付宝 / 尾号四位；省略用默认账户',
           },
           'payee': {'type': 'string', 'description': '商户或对方'},
           'note': {'type': 'string', 'description': '备注，可选'},
@@ -59,7 +59,7 @@ const aiToolSpecs = <Map<String, dynamic>>[
     'type': 'function',
     'function': {
       'name': 'create_transfer',
-      'description': '账户间转账/划转，例如“从微信转 500 到储蓄卡”“工资存进储蓄卡0137”。不产生收支。',
+      'description': '账户间转账/划转，例如“从微信转 500 到储蓄卡”。不产生收支。',
       'parameters': {
         'type': 'object',
         'properties': {
@@ -109,11 +109,11 @@ const aiToolSpecs = <Map<String, dynamic>>[
     'type': 'function',
     'function': {
       'name': 'create_account',
-      'description': '新建一个账户（钱包/银行卡/投资账户），例如“帮我建一张招商银行储蓄卡”。',
+      'description': '新建一个账户（钱包/银行卡/投资账户），例如“帮我建一张储蓄卡”。',
       'parameters': {
         'type': 'object',
         'properties': {
-          'name': {'type': 'string', 'description': '账户名称，例如 招商银行 / 现金钱包'},
+          'name': {'type': 'string', 'description': '账户名称，例如 银行名称 / 现金钱包'},
           'type': {
             'type': 'string',
             'enum': [
@@ -143,7 +143,7 @@ const aiToolSpecs = <Map<String, dynamic>>[
     'function': {
       'name': 'delete_account',
       'description':
-          '删除一个账户（移入回收站，可在回收站恢复）。用户说“把招商银行账户删掉”“不要花呗这个账户了”时调用；'
+          '删除一个账户（移入回收站，可在回收站恢复）。用户说“把某个银行账户删掉”“不要花呗这个账户了”时调用；'
           '删除前先用 list_accounts 确认账户名，账户名不明确时不要猜。',
       'parameters': {
         'type': 'object',
@@ -213,7 +213,7 @@ const aiToolSpecs = <Map<String, dynamic>>[
     'type': 'function',
     'function': {
       'name': 'create_weight_record',
-      'description': '记录体重（可带体脂率），例如“体重 65.5，体脂 18%”。',
+      'description': '记录体重（可带体脂率），例如“体重 60，体脂 18%”。',
       'parameters': {
         'type': 'object',
         'properties': {
@@ -232,7 +232,7 @@ const aiToolSpecs = <Map<String, dynamic>>[
     'type': 'function',
     'function': {
       'name': 'create_measure_record',
-      'description': '记录身体围度，例如“腰围 78.5”“胸围 95”。单位厘米。',
+      'description': '记录身体围度，例如“腰围 80”“胸围 95”。单位厘米。',
       'parameters': {
         'type': 'object',
         'properties': {

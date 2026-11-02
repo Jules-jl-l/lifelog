@@ -21,7 +21,7 @@ const imageExtractionInstruction =
     '"category": "分类建议(餐饮/交通/购物/居住/医疗/娱乐/工资等)",\n'
     ' 体重类补充: "weight_kg": 数字, "body_fat_pct": 数字或 null, '
     '"measured_at": "YYYY-MM-DD HH:mm",\n'
-    ' 围度类补充: "measures": [{"part": "腰围", "cm": 78.5}], '
+    ' 围度类补充: "measures": [{"part": "腰围", "cm": 80}], '
     '"measured_at": "YYYY-MM-DD HH:mm"}\n'
     '识别不到的字段用 null。';
 

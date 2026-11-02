@@ -87,7 +87,7 @@ class _ApiKeyDialogState extends ConsumerState<_ApiKeyDialog> {
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'API Key',
-              hintText: 'sk-...',
+              hintText: '必填',
             ),
           ),
         ],

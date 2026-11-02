@@ -333,6 +333,79 @@ class StudyRepository {
     );
   }
 
+  // ------------------------------------------------------------ 学习计时
+  Stream<List<StudySessionEntry>> watchStudySessions(DateTime from, DateTime to) {
+    final query = _db.select(_db.studySessions)
+      ..where(
+        (t) => t.deletedAt.isNull() &
+            t.startedAt.isBiggerOrEqualValue(startOfDay(from)) &
+            t.startedAt.isSmallerOrEqualValue(endOfDay(to)),
+      )
+      ..orderBy([(t) => OrderingTerm(expression: t.startedAt)]);
+    return query.watch().map(
+          (rows) => [for (final row in rows) _toStudySession(row)],
+        );
+  }
+
+  /// 正在计时的会话（全局最多一条）。
+  Stream<StudySessionEntry?> watchRunningStudySession() {
+    final query = _db.select(_db.studySessions)
+      ..where((t) => t.deletedAt.isNull() & t.endedAt.isNull())
+      ..orderBy([
+        (t) => OrderingTerm(expression: t.startedAt, mode: OrderingMode.desc),
+      ])
+      ..limit(1);
+    return query.watchSingleOrNull().map(
+          (row) => row == null ? null : _toStudySession(row),
+        );
+  }
+
+  /// 开始学习；已有进行中的计时则直接返回它，避免重复开表。
+  Future<StudySessionEntry> startStudySession({DateTime? at}) async {
+    final running = await (_db.select(_db.studySessions)
+          ..where((t) => t.deletedAt.isNull() & t.endedAt.isNull())
+          ..limit(1))
+        .getSingleOrNull();
+    if (running != null) return _toStudySession(running);
+
+    final now = at ?? DateTime.now();
+    final id = newId();
+    await _db.into(_db.studySessions).insert(
+          StudySessionsCompanion.insert(
+            id: id,
+            createdAt: now,
+            updatedAt: now,
+            startedAt: now,
+          ),
+        );
+    return StudySessionEntry(id: id, startedAt: now);
+  }
+
+  /// 结束学习并落库时长；记录由计时器自动写入，不提供手动修改。
+  Future<void> stopStudySession({required String id, DateTime? at}) async {
+    final row = await (_db.select(_db.studySessions)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null || row.endedAt != null) return;
+
+    final end = at ?? DateTime.now();
+    final seconds = end.difference(row.startedAt).inSeconds;
+    await (_db.update(_db.studySessions)..where((t) => t.id.equals(id))).write(
+      StudySessionsCompanion(
+        endedAt: Value(end),
+        durationSec: Value(seconds < 0 ? 0 : seconds),
+        updatedAt: Value(end),
+      ),
+    );
+  }
+
+  StudySessionEntry _toStudySession(StudySession row) => StudySessionEntry(
+        id: row.id,
+        startedAt: row.startedAt,
+        endedAt: row.endedAt,
+        durationSec: row.durationSec,
+      );
+
   // ------------------------------------------------------------ Future 版本（供 AI 工具使用）
   Future<List<Wordbook>> wordbooksOnce() async {
     return (_db.select(_db.wordbooks)

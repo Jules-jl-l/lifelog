@@ -29,11 +29,11 @@ class AiPage extends ConsumerStatefulWidget {
 class _AiPageState extends ConsumerState<AiPage> {
   static const _suggestions = <String>[
     '午饭 30',
-    '工资 8000 存进储蓄卡0137',
+    '工资 8000 存进储蓄卡',
     '微信转 500 到支付宝',
     '我现在总资产多少',
     '这个月预算设 3000',
-    '记腰围 78.5',
+    '记腰围 80',
     '今天要复习多少单词',
     '最近状态怎么样',
   ];

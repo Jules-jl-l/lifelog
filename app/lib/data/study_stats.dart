@@ -1,6 +1,7 @@
 /// 学习模块的纯逻辑：SRS 排程、今日队列、学习统计。不依赖数据库，便于单元测试。
 library;
 
+import '../core/period.dart';
 import '../core/utils.dart';
 
 /// 复习反馈：认识 / 模糊 / 不认识。
@@ -293,4 +294,106 @@ String formatStudyDuration(int seconds) {
   final minutes = seconds ~/ 60;
   final rest = seconds % 60;
   return rest == 0 ? '$minutes 分钟' : '$minutes 分 $rest 秒';
+}
+
+// ---------------------------------------------------------------- 学习计时
+
+/// 一次学习计时（endedAt 为空表示正在计时）。
+class StudySessionEntry {
+  const StudySessionEntry({
+    required this.id,
+    required this.startedAt,
+    this.endedAt,
+    this.durationSec = 0,
+  });
+
+  final String id;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final int durationSec;
+
+  bool get isRunning => endedAt == null;
+
+  /// 计时中的会话按「现在」实时计算，结束后使用落库的时长。
+  int effectiveDurationSec(DateTime now) {
+    if (!isRunning) return durationSec;
+    final seconds = now.difference(startedAt).inSeconds;
+    return seconds < 0 ? 0 : seconds;
+  }
+}
+
+class StudyTimeSummary {
+  const StudyTimeSummary({this.totalSec = 0, this.count = 0});
+
+  final int totalSec;
+  final int count;
+}
+
+StudyTimeSummary summarizeStudyTime(
+  Iterable<StudySessionEntry> sessions, {
+  required DateTime now,
+}) {
+  var total = 0;
+  var count = 0;
+  for (final session in sessions) {
+    total += session.effectiveDurationSec(now);
+    count++;
+  }
+  return StudyTimeSummary(totalSec: total, count: count);
+}
+
+/// 学习时长趋势：周 / 月按天、年按月，单位分钟。
+List<MetricPoint> studyTimeTrend(
+  Iterable<StudySessionEntry> sessions,
+  ViewPeriod period,
+  DateTime anchor, {
+  required DateTime now,
+}) {
+  final totals = <String, int>{};
+  for (final session in sessions) {
+    final key = periodBucketKeyOf(session.startedAt, period);
+    totals[key] = (totals[key] ?? 0) + session.effectiveDurationSec(now);
+  }
+  return [
+    for (final key in periodBucketKeys(period, anchor))
+      MetricPoint(
+        bucket: key,
+        // 整段区间都没有记录时返回 null，让图表显示空态而不是一条 0 线
+        value: totals.isEmpty ? null : (totals[key] ?? 0) / 60.0,
+      ),
+  ];
+}
+
+/// 学习时长平均值：周 / 月按已过天数，年按已过月数（单位秒）。
+int studyTimeAverageSec({
+  required int totalSec,
+  required ViewPeriod period,
+  required DateTime anchor,
+  required DateTime now,
+}) =>
+    averageByPeriod(
+      total: totalSec,
+      period: period,
+      anchor: anchor,
+      now: now,
+    );
+
+/// 学习总时长展示：优先显示小时，避免「300 分钟」不好读。
+String formatStudyTotal(int seconds) {
+  if (seconds < 60) return '$seconds 秒';
+  final hours = seconds ~/ 3600;
+  final minutes = (seconds % 3600) ~/ 60;
+  if (hours == 0) return '$minutes 分钟';
+  return minutes == 0 ? '$hours 小时' : '$hours 小时 $minutes 分';
+}
+
+/// 计时器展示：HH:MM:SS（小时可以超过 24）。
+String formatStudyTimer(int seconds) {
+  final safe = seconds < 0 ? 0 : seconds;
+  final hours = safe ~/ 3600;
+  final minutes = (safe % 3600) ~/ 60;
+  final rest = safe % 60;
+  return '${hours.toString().padLeft(2, '0')}:'
+      '${minutes.toString().padLeft(2, '0')}:'
+      '${rest.toString().padLeft(2, '0')}';
 }

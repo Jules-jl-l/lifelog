@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils.dart';
 import '../../data/db/database.dart';
 import '../../data/providers.dart';
+import '../../shared/amount_calculator_sheet.dart';
 
 class AccountEditorPage extends ConsumerStatefulWidget {
   const AccountEditorPage({super.key, this.existing});
@@ -157,6 +158,19 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
     }
   }
 
+  Future<void> _editAmount(TextEditingController controller) async {
+    final current = controller.text.trim();
+    final value = await showAmountCalculator(
+      context,
+      initialValue: current == '0' || current == '0.00' ? '' : current,
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      controller.text = value;
+      controller.selection = TextSelection.collapsed(offset: value.length);
+    });
+  }
+
   void _notify(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
@@ -192,7 +206,7 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
             autofocus: !_editing,
             decoration: const InputDecoration(
               labelText: '账户名称',
-              hintText: '例如：招商银行、微信',
+              hintText: '必填',
             ),
           ),
           const SizedBox(height: 20),
@@ -228,11 +242,7 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
               controller: _customType,
               decoration: InputDecoration(
                 labelText: '自定义类型名称',
-                hintText: switch (_accountClass) {
-                  AccountClass.asset => '例如：公积金、押金',
-                  AccountClass.investment => '例如：黄金、数字资产',
-                  AccountClass.liability => '例如：装修欠款',
-                },
+                hintText: '必填',
               ),
             ),
           ],
@@ -258,7 +268,7 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     ],
                     decoration: const InputDecoration(
                       labelText: '前四位',
-                      hintText: '6225（选填）',
+                      hintText: '选填',
                     ),
                   ),
                 ),
@@ -275,7 +285,7 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                     ],
                     decoration: const InputDecoration(
                       labelText: '后四位',
-                      hintText: '0137（必填）',
+                      hintText: '必填',
                     ),
                   ),
                 ),
@@ -285,10 +295,8 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
           const SizedBox(height: 20),
           TextField(
             controller: _balance,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
-            ],
+            readOnly: true,
+            onTap: _saving ? null : () => _editAmount(_balance),
             decoration: InputDecoration(
               labelText: switch (_accountClass) {
                 AccountClass.asset => '初始余额',
@@ -296,21 +304,29 @@ class _AccountEditorPageState extends ConsumerState<AccountEditorPage> {
                 AccountClass.liability => '当前欠款',
               },
               prefixText: '¥ ',
-              hintText: _isLiability ? '填正数，例如 1702.47' : '0.00',
+              hintText: _isLiability ? '填正数' : '必填',
+              suffixIcon: IconButton(
+                tooltip: '金额计算',
+                onPressed: _saving ? null : () => _editAmount(_balance),
+                icon: const Icon(Icons.calculate_outlined),
+              ),
             ),
           ),
           if (_isInvestment) ...[
             const SizedBox(height: 20),
             TextField(
               controller: _marketValue,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
-              ],
-              decoration: const InputDecoration(
+              readOnly: true,
+              onTap: _saving ? null : () => _editAmount(_marketValue),
+              decoration: InputDecoration(
                 labelText: '当前市值',
                 prefixText: '¥ ',
                 hintText: '留空则等于本金',
+                suffixIcon: IconButton(
+                  tooltip: '金额计算',
+                  onPressed: _saving ? null : () => _editAmount(_marketValue),
+                  icon: const Icon(Icons.calculate_outlined),
+                ),
               ),
             ),
             const SizedBox(height: 8),

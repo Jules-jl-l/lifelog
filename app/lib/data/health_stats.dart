@@ -64,8 +64,10 @@ const defaultMeasureParts = <String>[
   '臂围',
   '大腿围',
   '小腿围',
-  '颈围',
 ];
+
+/// 已下线的部位：旧记录不再出现在围度选择与统计中（数据仍保留在库里）。
+const removedMeasureParts = <String>['颈围'];
 
 /// 「综合」视图：一次看六个核心围度。
 const measureOverview = '综合';
@@ -217,7 +219,7 @@ String bmiLabel(double bmi) {
 List<String> measureParts(Iterable<MeasureEntry> entries) {
   final present = {
     for (final entry in entries) canonicalMeasurePart(entry.part),
-  };
+  }..removeWhere(removedMeasureParts.contains);
   final result = [
     for (final part in defaultMeasureParts)
       if (present.contains(part)) part,

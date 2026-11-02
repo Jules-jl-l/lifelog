@@ -62,9 +62,13 @@ class _FinancePageState extends ConsumerState<FinancePage> {
     final points = buildTrend(entries, _period, _anchor);
     final options = periodOptions(_period, _now);
     final selectedKey = _selectedPeriodKey(options);
-    final kindCount = entries.where((entry) => entry.kind == _kind).length;
     final kindTotal = _kind == TxnKind.expense ? summary.expense : summary.income;
-    final average = kindCount == 0 ? 0 : (kindTotal / kindCount).round();
+    final average = averageByPeriod(
+      total: kindTotal,
+      period: _period,
+      anchor: _anchor,
+      now: _now,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -162,7 +166,7 @@ class _FinancePageState extends ConsumerState<FinancePage> {
                 ),
               ),
               Text(
-                '平均 ¥${formatCents(average)}',
+                '${_period == ViewPeriod.year ? '月均' : '日均'} ¥${formatCents(average)}',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline),
               ),

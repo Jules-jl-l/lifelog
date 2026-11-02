@@ -56,3 +56,16 @@ final quizSessionsProvider = StreamProvider.family<
   (ref, range) =>
       ref.watch(studyRepositoryProvider).watchQuizSessions(range.start, range.end),
 );
+
+/// 指定时间范围内开始的学习计时记录。
+final studySessionsProvider = StreamProvider.family<
+    List<StudySessionEntry>,
+    ({DateTime start, DateTime end})>(
+  (ref, range) =>
+      ref.watch(studyRepositoryProvider).watchStudySessions(range.start, range.end),
+);
+
+/// 正在计时的学习会话。
+final runningStudySessionProvider = StreamProvider<StudySessionEntry?>(
+  (ref) => ref.watch(studyRepositoryProvider).watchRunningStudySession(),
+);

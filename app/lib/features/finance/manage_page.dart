@@ -2,7 +2,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/async_x.dart';
@@ -10,6 +9,7 @@ import '../../core/utils.dart';
 import '../../data/db/database.dart';
 import '../../data/finance_stats.dart';
 import '../../data/providers.dart';
+import '../../shared/amount_calculator_sheet.dart';
 import 'account_editor_page.dart';
 import 'account_meta.dart';
 import 'category_editor_page.dart';
@@ -369,14 +369,28 @@ class _BudgetsTabState extends ConsumerState<_BudgetsTab> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  decoration: const InputDecoration(
+                  readOnly: true,
+                  onTap: () async {
+                    final value = await showAmountCalculator(
+                      dialogContext,
+                      initialValue: amountController.text,
+                    );
+                    if (value != null) amountController.text = value;
+                  },
+                  decoration: InputDecoration(
                     labelText: '预算金额',
                     prefixText: '¥ ',
+                    suffixIcon: IconButton(
+                      tooltip: '金额计算',
+                      icon: const Icon(Icons.calculate_outlined),
+                      onPressed: () async {
+                        final value = await showAmountCalculator(
+                          dialogContext,
+                          initialValue: amountController.text,
+                        );
+                        if (value != null) amountController.text = value;
+                      },
+                    ),
                   ),
                 ),
               ],

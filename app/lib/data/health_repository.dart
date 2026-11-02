@@ -150,6 +150,30 @@ class HealthRepository {
     );
   }
 
+  /// 一次性保存同一天的多个围度（毫米）；空值由调用方过滤。
+  Future<void> saveMeasures({
+    required DateTime measuredAt,
+    required Map<String, int> values,
+    String? note,
+  }) async {
+    if (values.isEmpty) return;
+    final now = DateTime.now();
+    await _db.batch(
+      (batch) => batch.insertAll(_db.bodyMeasures, [
+        for (final entry in values.entries)
+          BodyMeasuresCompanion.insert(
+            id: newId(),
+            createdAt: now,
+            updatedAt: now,
+            measuredAt: measuredAt,
+            part: entry.key,
+            valueMm: entry.value,
+            note: Value(note),
+          ),
+      ]),
+    );
+  }
+
   // ------------------------------------------------------------ 运动
   Stream<List<WorkoutEntry>> watchWorkoutEntries(DateTime from, DateTime to) {
     final query = _db.select(_db.workouts)

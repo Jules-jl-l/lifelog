@@ -96,8 +96,8 @@ class _WeightEditorState extends ConsumerState<_WeightEditor> {
       children: [
         _NumberField(
           controller: _weight,
-          label: '体重（kg）',
-          hint: '例如 65.5',
+          label: '体重',
+          suffixText: 'kg',
         ),
         const SizedBox(height: 12),
         _NumberField(controller: _bodyFat, label: '体脂率（%，可选）'),
@@ -160,17 +160,22 @@ class _MeasureEditor extends ConsumerStatefulWidget {
 }
 
 class _MeasureEditorState extends ConsumerState<_MeasureEditor> {
+  late final Map<String, TextEditingController> _values;
   late final TextEditingController _value;
   late final TextEditingController _note;
   late String _part;
   late DateTime _at;
   bool _saving = false;
 
+  bool get _creating => widget.existing == null;
+
   List<String> get _partOptions {
     final options = <String>[
       ...defaultMeasureParts,
       for (final part in widget.knownParts)
-        if (!defaultMeasureParts.contains(part)) part,
+        if (!defaultMeasureParts.contains(part) &&
+            !removedMeasureParts.contains(part))
+          part,
     ];
     final current = widget.existing?.part;
     if (current != null && !options.contains(current)) options.add(current);
@@ -184,22 +189,30 @@ class _MeasureEditorState extends ConsumerState<_MeasureEditor> {
     _value = TextEditingController(
       text: existing == null ? '' : formatCm(existing.mm),
     );
+    _values = {
+      for (final part in coreMeasureParts)
+        part: TextEditingController(),
+    };
     _note = TextEditingController();
-    _part = existing?.part ?? defaultMeasureParts.first;
+    _part = existing?.part ?? coreMeasureParts.first;
     _at = existing?.at ?? DateTime.now();
   }
 
   @override
   void dispose() {
     _value.dispose();
+    for (final controller in _values.values) {
+      controller.dispose();
+    }
     _note.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return _SheetBody(
-      title: widget.existing == null ? '记录围度' : '编辑围度',
+      title: _creating ? '记录围度' : '编辑围度',
       onDelete: widget.existing == null
           ? null
           : () => _handle(
@@ -210,29 +223,58 @@ class _MeasureEditorState extends ConsumerState<_MeasureEditor> {
       saving: _saving,
       onSave: _save,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text('部位', style: Theme.of(context).textTheme.labelLarge),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final option in _partOptions)
-              ChoiceChip(
-                label: Text(option),
-                selected: _part == option,
-                onSelected: (_) => setState(() => _part = option),
-              ),
+        if (!_creating) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('部位', style: theme.textTheme.labelLarge),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in _partOptions)
+                ChoiceChip(
+                  label: Text(option),
+                  selected: _part == option,
+                  onSelected: (_) => setState(() => _part = option),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _NumberField(
+            controller: _value,
+            label: '数值',
+            suffixText: 'cm',
+          ),
+        ] else ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '六项围度（cm，可只填有数据的项）',
+              style: theme.textTheme.labelLarge,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (var row = 0; row < 2; row++) ...[
+            Row(
+              children: [
+                for (var column = 0; column < 3; column++) ...[
+                  if (column > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _NumberField(
+                      controller:
+                          _values[coreMeasureParts[row * 3 + column]]!,
+                      label: coreMeasureParts[row * 3 + column],
+                      suffixText: 'cm',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (row == 0) const SizedBox(height: 12),
           ],
-        ),
-        const SizedBox(height: 16),
-        _NumberField(
-          controller: _value,
-          label: '数值（cm）',
-          hint: '例如 78.5',
-        ),
+        ],
         _DateTimeTile(
           value: _at,
           onChanged: (value) => setState(() => _at = value),
@@ -240,13 +282,39 @@ class _MeasureEditorState extends ConsumerState<_MeasureEditor> {
         const SizedBox(height: 12),
         TextField(
           controller: _note,
-          decoration: const InputDecoration(labelText: '备注'),
+          decoration: const InputDecoration(labelText: '备注', hintText: '选填'),
         ),
       ],
     );
   }
 
   Future<void> _save() async {
+    if (_creating) {
+      final values = <String, int>{};
+      for (final entry in _values.entries) {
+        final text = entry.value.text.trim();
+        if (text.isEmpty) continue;
+        final mm = parseCmToMm(text);
+        if (mm <= 0) {
+          _notify('「${entry.key}」请填写有效数值');
+          return;
+        }
+        values[entry.key] = mm;
+      }
+      if (values.isEmpty) {
+        _notify('请至少填写一项围度');
+        return;
+      }
+      await _handle(
+        () => ref.read(healthRepositoryProvider).saveMeasures(
+              measuredAt: _at,
+              values: values,
+              note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+            ),
+      );
+      return;
+    }
+
     final mm = parseCmToMm(_value.text);
     if (mm <= 0) {
       _notify('请填写有效的数值');
@@ -291,6 +359,7 @@ class _WorkoutEditor extends ConsumerStatefulWidget {
 }
 
 class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
+  late final TextEditingController _hours;
   late final TextEditingController _minutes;
   late final TextEditingController _distance;
   late final TextEditingController _calories;
@@ -304,8 +373,12 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
   void initState() {
     super.initState();
     final existing = widget.existing;
+    final totalMinutes = existing?.minutes ?? 0;
+    _hours = TextEditingController(
+      text: totalMinutes == 0 ? '' : '${totalMinutes ~/ 60}',
+    );
     _minutes = TextEditingController(
-      text: existing == null ? '' : existing.minutes.toString(),
+      text: totalMinutes == 0 ? '' : '${totalMinutes % 60}',
     );
     _distance = TextEditingController(
       text: existing?.meters == null ? '' : formatKm(existing!.meters!),
@@ -321,6 +394,7 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
 
   @override
   void dispose() {
+    _hours.dispose();
     _minutes.dispose();
     _distance.dispose();
     _calories.dispose();
@@ -361,7 +435,30 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
           ],
         ),
         const SizedBox(height: 16),
-        _NumberField(controller: _minutes, label: '时长（分钟）', hint: '例如 35'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('时长', style: Theme.of(context).textTheme.labelLarge),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _NumberField(
+                controller: _hours,
+                label: '小时',
+                digitsOnly: true,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _NumberField(
+                controller: _minutes,
+                label: '分钟',
+                digitsOnly: true,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         _NumberField(controller: _distance, label: '距离（km，可选）'),
         const SizedBox(height: 12),
@@ -375,14 +472,20 @@ class _WorkoutEditorState extends ConsumerState<_WorkoutEditor> {
         const SizedBox(height: 12),
         TextField(
           controller: _note,
-          decoration: const InputDecoration(labelText: '备注'),
+          decoration: const InputDecoration(labelText: '备注', hintText: '选填'),
         ),
       ],
     );
   }
 
   Future<void> _save() async {
-    final minutes = int.tryParse(_minutes.text.trim()) ?? 0;
+    final hours = int.tryParse(_hours.text.trim()) ?? 0;
+    final minutesPart = int.tryParse(_minutes.text.trim()) ?? 0;
+    if (minutesPart > 59) {
+      _notify('分钟需要填写 0-59');
+      return;
+    }
+    final minutes = hours * 60 + minutesPart;
     if (minutes <= 0) {
       _notify('请填写有效的时长');
       return;
@@ -491,19 +594,35 @@ class _SheetBody extends StatelessWidget {
 }
 
 class _NumberField extends StatelessWidget {
-  const _NumberField({required this.controller, required this.label, this.hint});
+  const _NumberField({
+    required this.controller,
+    required this.label,
+    this.suffixText,
+    this.digitsOnly = false,
+  });
 
   final TextEditingController controller;
   final String label;
-  final String? hint;
+  final String? suffixText;
+  final bool digitsOnly;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-      decoration: InputDecoration(labelText: label, hintText: hint),
+      keyboardType: digitsOnly
+          ? TextInputType.number
+          : const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        if (digitsOnly)
+          FilteringTextInputFormatter.digitsOnly
+        else
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+      ],
+      decoration: InputDecoration(
+        labelText: label,
+        suffixText: suffixText,
+      ),
     );
   }
 }

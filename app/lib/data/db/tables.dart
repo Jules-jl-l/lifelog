@@ -301,6 +301,18 @@ class StudyStats extends Table with BaseColumns {
   Set<Column> get primaryKey => {id};
 }
 
+/// 学习计时：点「开始学习」写入一条，点「结束学习」补上结束时间与时长。
+///
+/// 结束时间为空表示正在计时；该记录只由计时器写入，不支持手动修改。
+class StudySessions extends Table with BaseColumns {
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get endedAt => dateTime().nullable()();
+  IntColumn get durationSec => integer().withDefault(const Constant(0))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 /// 一次拼写 / 听写测验（完成一轮才写入）。
 class QuizSessions extends Table with BaseColumns {
   /// 为空表示跨词库抽题（当前版本总是具体词库）。

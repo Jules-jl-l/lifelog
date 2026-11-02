@@ -1,16 +1,20 @@
-/// 学习模块：背词 / 词库 / 统计。
+/// 学习模块：学习时间统计（主页面）+ 英语学习子模块。
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/async_x.dart';
+import '../../core/period.dart';
 import '../../core/utils.dart';
 import '../../data/db/database.dart';
 import '../../data/providers.dart';
 import '../../data/study/quiz.dart';
 import '../../data/study_stats.dart';
 import '../../shared/line_trend_chart.dart';
+import '../../shared/period_strip.dart';
 import '../../shared/stat_card.dart';
 import 'pronunciation.dart';
 import 'quiz_tab.dart';
@@ -25,13 +29,21 @@ class StudyPage extends ConsumerStatefulWidget {
   ConsumerState<StudyPage> createState() => _StudyPageState();
 }
 
-class _StudyPageState extends ConsumerState<StudyPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 4, vsync: this);
+class _StudyPageState extends ConsumerState<StudyPage> {
+  ViewPeriod _period = ViewPeriod.month;
+  late final DateTime _bootAt;
+  late DateTime _anchor;
+  late DateTime _now;
+  Timer? _ticker;
+  bool _timerBusy = false;
 
   @override
   void initState() {
     super.initState();
+    _bootAt = DateTime.now();
+    _anchor = _bootAt;
+    _now = _bootAt;
+
     // 首次进入时写入内置词库（幂等，已存在则跳过）
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -47,40 +59,412 @@ class _StudyPageState extends ConsumerState<StudyPage>
 
   @override
   void dispose() {
-    _tabs.dispose();
+    _stopTicker();
     super.dispose();
   }
+
+  void _startTicker() {
+    if (_ticker != null) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  ViewPeriod get _rangePeriod => _period;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final (start, end) = _rangePeriod.rangeOf(_anchor);
+    final options = periodOptions(_rangePeriod, _now);
+    final selectedKey = _selectedPeriodKey(options);
+    final sessionsAsync =
+        ref.watch(studySessionsProvider((start: start, end: end)));
+    final sessions = sessionsAsync.dataOrNull ?? const <StudySessionEntry>[];
+    final running = ref.watch(runningStudySessionProvider).dataOrNull;
+
+    // 只有计时进行中才按秒刷新，避免空闲时整页每秒重建
+    if (running != null) {
+      if (_ticker == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _startTicker();
+        });
+      }
+    } else {
+      _stopTicker();
+    }
+
+    final summary = summarizeStudyTime(sessions, now: _now);
+    final average = studyTimeAverageSec(
+      totalSec: summary.totalSec,
+      period: _rangePeriod,
+      anchor: _anchor,
+      now: _now,
+    );
+    final todaySec = sessions
+        .where(
+          (session) =>
+              formatDate(session.startedAt) == formatDate(_now),
+        )
+        .fold<int>(
+          0,
+          (sum, session) => sum + session.effectiveDurationSec(_now),
+        );
+    final points = studyTimeTrend(
+      sessions,
+      _rangePeriod,
+      _anchor,
+      now: _now,
+    );
+    final runningSeconds = running?.effectiveDurationSec(_now) ?? 0;
+
     return Scaffold(
       appBar: AppBar(title: const Text('学习')),
-      body: Column(
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          TabBar(
-            controller: _tabs,
-            labelColor: theme.colorScheme.primary,
-            tabs: const [
-              Tab(text: '背词'),
-              Tab(text: '测验'),
-              Tab(text: '词库'),
-              Tab(text: '统计'),
+          SegmentedButton<ViewPeriod>(
+            segments: [
+              for (final period in ViewPeriod.values)
+                ButtonSegment(value: period, label: Text(period.label)),
+            ],
+            selected: {_rangePeriod},
+            showSelectedIcon: false,
+            onSelectionChanged: (values) =>
+                setState(() => _period = values.first),
+          ),
+          const SizedBox(height: 4),
+          PeriodStrip(
+            options: options,
+            selectedKey: selectedKey,
+            onSelected: (option) => setState(() => _anchor = option.anchor),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+            child: Text(
+              periodRangeHint(_rangePeriod, start, end),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.timer_outlined,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text('学习计时', style: theme.textTheme.titleMedium),
+                      const Spacer(),
+                      if (running != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer
+                                .withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '进行中',
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: theme.colorScheme.primary),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      formatStudyTimer(runningSeconds),
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 30,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _timerBusy || running != null
+                              ? null
+                              : _startStudy,
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('开始学习'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _timerBusy || running == null
+                              ? null
+                              : _stopStudy,
+                          icon: const Icon(Icons.stop_circle_outlined),
+                          label: const Text('结束学习'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    running == null
+                        ? '点击开始，自动记录学习时长；计时记录不支持手动修改'
+                        : '开始于 ${formatDateTime(running.startedAt)}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: StatCard(
+                  label: '学习总时长',
+                  value: summary.count == 0
+                      ? '—'
+                      : formatStudyTotal(summary.totalSec),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: StatCard(
+                  label: _rangePeriod == ViewPeriod.year ? '月均' : '日均',
+                  value: summary.count == 0
+                      ? '—'
+                      : formatStudyTotal(average),
+                  hint: _rangePeriod == ViewPeriod.year ? '按已过月数' : '按已过天数',
+                ),
+              ),
             ],
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: const [
-                _ReviewTab(),
-                QuizTab(),
-                _WordbooksTab(),
-                _StatsTab(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: StatCard(
+                  label: '学习次数',
+                  value: '${summary.count} 次',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: StatCard(
+                  label: '今日学习',
+                  value: todaySec == 0 ? '—' : formatStudyTotal(todaySec),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Text('学习时长趋势', style: theme.textTheme.titleMedium),
+                      const Spacer(),
+                      Text(
+                        _rangePeriod == ViewPeriod.year ? '按月 · 分钟' : '按天 · 分钟',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.outline),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LineTrendChart(points: points, decimals: 0),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Column(
+              children: [
+                for (final session in sessions.reversed.take(30))
+                  ListTile(
+                    title: Text(
+                      '${formatStudyTotal(session.effectiveDurationSec(_now))}'
+                      '${session.isRunning ? ' · 进行中' : ''}',
+                    ),
+                    subtitle: Text(
+                      '${formatDateTime(session.startedAt)}'
+                      '${session.endedAt == null ? '' : ' ~ ${formatDateTime(session.endedAt!)}'}',
+                    ),
+                  ),
+                if (sessions.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('该区间还没有学习记录'),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                Text('英语学习', style: theme.textTheme.titleMedium),
+                const Spacer(),
+                Text(
+                  '可继续拓展其他学习模块',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: const Text('背词'),
+                  subtitle: const Text('按 SRS 复习今日队列'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openEnglishModule(
+                    const _EnglishModulePage(
+                      title: '英语学习 · 背词',
+                      child: _ReviewTab(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.spellcheck),
+                  title: const Text('测验'),
+                  subtitle: const Text('看释义拼写 / 听音拼写'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openEnglishModule(
+                    const _EnglishModulePage(
+                      title: '英语学习 · 测验',
+                      child: QuizTab(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.library_books_outlined),
+                  title: const Text('词库'),
+                  subtitle: const Text('内置词库、自建词库与导入'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openEnglishModule(
+                    const _EnglishModulePage(
+                      title: '英语学习 · 词库',
+                      child: _WordbooksTab(),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.insights_outlined),
+                  title: const Text('学习统计'),
+                  subtitle: const Text('词量、正确率、用时与测验战绩'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _openEnglishModule(
+                    const _EnglishModulePage(
+                      title: '英语学习 · 统计',
+                      child: _StatsTab(),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  String _selectedPeriodKey(List<PeriodOption> options) {
+    for (final option in options.reversed) {
+      final (start, end) = _rangePeriod.rangeOf(option.anchor);
+      if (!_anchor.isBefore(start) && !_anchor.isAfter(end)) {
+        return option.key;
+      }
+    }
+    return options.last.key;
+  }
+
+  void _openEnglishModule(Widget page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
+  Future<void> _startStudy() async {
+    setState(() => _timerBusy = true);
+    try {
+      await ref.read(studyRepositoryProvider).startStudySession();
+      if (mounted) setState(() => _now = DateTime.now());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('开始计时失败：$error')));
+    } finally {
+      if (mounted) setState(() => _timerBusy = false);
+    }
+  }
+
+  Future<void> _stopStudy() async {
+    final running = ref.read(runningStudySessionProvider).dataOrNull;
+    if (running == null) return;
+    setState(() => _timerBusy = true);
+    try {
+      await ref
+          .read(studyRepositoryProvider)
+          .stopStudySession(id: running.id);
+      if (!mounted) return;
+      final seconds = running.effectiveDurationSec(DateTime.now());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已记录学习 ${formatStudyTotal(seconds)}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('结束计时失败：$error')));
+    } finally {
+      if (mounted) setState(() => _timerBusy = false);
+    }
+  }
+}
+
+/// 英语学习子模块的独立页面容器。
+class _EnglishModulePage extends StatelessWidget {
+  const _EnglishModulePage({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: child,
     );
   }
 }

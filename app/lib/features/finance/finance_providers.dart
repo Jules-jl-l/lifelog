@@ -37,6 +37,29 @@ final categoriesProvider = StreamProvider<List<Category>>(
   (ref) => ref.watch(financeRepositoryProvider).watchCategories(),
 );
 
+/// 商户 / 备注历史回溯的查询键。
+typedef SuggestionKey = ({TxnKind kind, String categoryId});
+
+/// 选中分类后，该分类下出现最多的商户。
+final payeeSuggestionsProvider =
+    StreamProvider.family<List<String>, SuggestionKey>((ref, key) {
+  return ref.watch(financeRepositoryProvider).watchFrequentValues(
+        kind: key.kind,
+        categoryId: key.categoryId,
+        payee: true,
+      );
+});
+
+/// 选中分类后，该分类下出现最多的备注。
+final noteSuggestionsProvider =
+    StreamProvider.family<List<String>, SuggestionKey>((ref, key) {
+  return ref.watch(financeRepositoryProvider).watchFrequentValues(
+        kind: key.kind,
+        categoryId: key.categoryId,
+        payee: false,
+      );
+});
+
 final budgetsProvider = StreamProvider.family<List<Budget>, String>(
   (ref, period) =>
       ref.watch(financeRepositoryProvider).watchBudgets(period),

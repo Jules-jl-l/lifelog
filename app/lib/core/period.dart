@@ -150,3 +150,36 @@ String periodRangeHint(ViewPeriod period, DateTime start, DateTime end) =>
       ViewPeriod.month => '${start.year} 年 ${start.month} 月',
       ViewPeriod.year => '${start.year} 年',
     };
+
+/// 周期内已经过去的「天」（周 / 月）或「月」（年），用于平均值分母。
+///
+/// - 当前周期只按已过天数 / 月数计算，避免月初显示被整月摊薄；
+/// - 已结束的周期按完整长度计算；
+/// - 未来周期按 1 计算，避免除以 0。
+int elapsedUnits(ViewPeriod period, DateTime anchor, DateTime now) {
+  final (start, end) = period.rangeOf(anchor);
+  final full = switch (period) {
+    ViewPeriod.week => 7,
+    ViewPeriod.month => end.day,
+    ViewPeriod.year => 12,
+  };
+  if (now.isBefore(start)) return 1;
+  if (now.isAfter(end)) return full;
+  return switch (period) {
+    ViewPeriod.week => now.difference(start).inDays + 1,
+    ViewPeriod.month => now.day,
+    ViewPeriod.year => now.month,
+  };
+}
+
+/// 平均值：周 / 月按「已过天数」，年按「已过月数」。
+int averageByPeriod({
+  required int total,
+  required ViewPeriod period,
+  required DateTime anchor,
+  required DateTime now,
+}) {
+  final units = elapsedUnits(period, anchor, now);
+  if (units <= 0) return 0;
+  return (total / units).round();
+}

@@ -134,6 +134,7 @@ class FinanceRepository {
                 amount: row.amount,
                 accountId: row.accountId,
                 toAccountId: row.toAccountId,
+                occurredAt: row.occurredAt,
               ),
           ],
         );
@@ -150,6 +151,7 @@ class FinanceRepository {
           amount: row.amount,
           accountId: row.accountId,
           toAccountId: row.toAccountId,
+          occurredAt: row.occurredAt,
         ),
     ];
   }
@@ -261,6 +263,47 @@ class FinanceRepository {
       );
     }
     return query.watch();
+  }
+
+  /// 某个分类下历史出现最多的商户或备注（最多 [limit] 条）。
+  ///
+  /// 金额输入时用于「历史回溯」：同一分类内按出现次数降序，次数相同按时间新到旧。
+  Stream<List<String>> watchFrequentValues({
+    required TxnKind kind,
+    required String categoryId,
+    required bool payee,
+    int limit = 8,
+  }) {
+    final query = _db.select(_db.transactions)
+      ..where(
+        (t) => t.deletedAt.isNull() &
+            t.kind.equalsValue(kind) &
+            t.categoryId.equals(categoryId),
+      )
+      ..orderBy([
+        (t) => OrderingTerm(expression: t.occurredAt, mode: OrderingMode.desc),
+      ]);
+    return query.watch().map((rows) {
+      final counts = <String, int>{};
+      final latest = <String, DateTime>{};
+      for (final row in rows) {
+        final raw = payee ? row.payee : row.note;
+        final value = raw?.trim();
+        if (value == null || value.isEmpty) continue;
+        counts[value] = (counts[value] ?? 0) + 1;
+        final current = latest[value];
+        if (current == null || row.occurredAt.isAfter(current)) {
+          latest[value] = row.occurredAt;
+        }
+      }
+      final values = counts.keys.toList()
+        ..sort((a, b) {
+          final byCount = counts[b]!.compareTo(counts[a]!);
+          if (byCount != 0) return byCount;
+          return latest[b]!.compareTo(latest[a]!);
+        });
+      return values.take(limit).toList();
+    });
   }
 
   Future<void> saveTransaction({
