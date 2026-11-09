@@ -282,11 +282,16 @@ class _NetWorthCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                formatCents(summary.netWorth),
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  formatCents(summary.netWorth),
+                  maxLines: 1,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const SizedBox(height: 18),
@@ -340,11 +345,16 @@ class _HeaderMetric extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -371,22 +381,39 @@ class _GroupHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
+            flex: 2,
             child: Text(accountClass.label, style: theme.textTheme.titleSmall),
           ),
-          Text(
-            formatCents(total),
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.outline,
+          Flexible(
+            flex: 3,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                formatCents(total),
+                maxLines: 1,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
             ),
           ),
           if (profit != null) ...[
             const SizedBox(width: 8),
-            Text(
-              '盈亏 ${profit! >= 0 ? '+' : ''}${formatCents(profit!)}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: profit! < 0
-                    ? theme.colorScheme.error
-                    : const Color(0xFF2E9E62),
+            Flexible(
+              flex: 3,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '盈亏 ${profit! >= 0 ? '+' : ''}${formatCents(profit!)}',
+                  maxLines: 1,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: profit! < 0
+                        ? theme.colorScheme.error
+                        : const Color(0xFF2E9E62),
+                  ),
+                ),
               ),
             ),
           ],
@@ -439,27 +466,40 @@ class _AccountRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                liability ? '-${formatCents(value)}' : formatCents(value),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: liability ? theme.colorScheme.error : null,
-                ),
-              ),
-              if (investment)
-                Text(
-                  '${profit >= 0 ? '+' : ''}${formatCents(profit)}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: profit < 0
-                        ? theme.colorScheme.error
-                        : const Color(0xFF2E9E62),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 132),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    liability ? '-${formatCents(value)}' : formatCents(value),
+                    maxLines: 1,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: liability ? theme.colorScheme.error : null,
+                    ),
                   ),
                 ),
-            ],
+                if (investment)
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${profit >= 0 ? '+' : ''}${formatCents(profit)}',
+                      maxLines: 1,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: profit < 0
+                            ? theme.colorScheme.error
+                            : const Color(0xFF2E9E62),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           if (onEditMarket != null)
             IconButton(

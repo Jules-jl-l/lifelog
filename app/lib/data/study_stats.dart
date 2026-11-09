@@ -358,8 +358,8 @@ List<MetricPoint> studyTimeTrend(
     for (final key in periodBucketKeys(period, anchor))
       MetricPoint(
         bucket: key,
-        // 整段区间都没有记录时返回 null，让图表显示空态而不是一条 0 线
-        value: totals.isEmpty ? null : (totals[key] ?? 0) / 60.0,
+        // 没有学习记录的日期返回 null，图表 X 轴不会列出空日期
+        value: totals.containsKey(key) ? totals[key]! / 60.0 : null,
       ),
   ];
 }

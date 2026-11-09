@@ -105,7 +105,7 @@ class CategoryPieChart extends StatelessWidget {
   }
 }
 
-class TrendLineChart extends StatelessWidget {
+class TrendLineChart extends StatefulWidget {
   const TrendLineChart({super.key, required this.points});
 
   final List<TrendPoint> points;
@@ -114,8 +114,25 @@ class TrendLineChart extends StatelessWidget {
   static const expenseColor = Color(0xFF80C1FF);
 
   @override
+  State<TrendLineChart> createState() => _TrendLineChartState();
+}
+
+class _TrendLineChartState extends State<TrendLineChart> {
+  /// 点选后保持选中的桶下标。
+  int? _selected;
+
+  int? get _active {
+    final index = _selected;
+    if (index == null || index < 0 || index >= widget.points.length) {
+      return null;
+    }
+    return index;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final points = widget.points;
     final hasData =
         points.isNotEmpty && points.any((p) => p.income > 0 || p.expense > 0);
 
@@ -145,15 +162,26 @@ class TrendLineChart extends StatelessWidget {
     final compact = points.length <= 7;
     final step = compact ? 1 : (points.length / 6).ceil();
 
-    // 按当前字体倍率测量轴标签，避免大字体下金额/日期被裁掉。
+    // 按当前字体倍率测量轴标签，取所有刻度里最宽的一条，避免大金额被裁掉。
     final labelStyle = theme.textTheme.labelSmall ?? const TextStyle(fontSize: 11);
     final textScaler = MediaQuery.textScalerOf(context);
-    final axisPainter = TextPainter(
-      text: TextSpan(text: _formatAxisAmount(maxY.round()), style: labelStyle),
-      textDirection: TextDirection.ltr,
-      textScaler: textScaler,
-    )..layout();
-    final leftReserved = axisPainter.width + 12;
+    double measureWidth(String text) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: labelStyle),
+        textDirection: TextDirection.ltr,
+        textScaler: textScaler,
+      )..layout();
+      return painter.width;
+    }
+
+    var leftReserved = 0.0;
+    for (var index = 0; index <= 4; index++) {
+      final width = measureWidth(
+        _formatAxisAmount((maxY * index / 4).round()),
+      );
+      if (width > leftReserved) leftReserved = width;
+    }
+    leftReserved += 16;
     final bottomPainter = TextPainter(
       text: TextSpan(text: '10-01', style: labelStyle),
       textDirection: TextDirection.ltr,
@@ -161,92 +189,156 @@ class TrendLineChart extends StatelessWidget {
     )..layout();
     final bottomReserved = bottomPainter.height + 8;
 
-    return SizedBox(
-      height: 240,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: LineChart(
-          LineChartData(
-            minY: 0,
-            maxY: maxY,
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: maxY / 4,
-              getDrawingHorizontalLine: (_) => FlLine(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
-                strokeWidth: 1,
-              ),
-            ),
-            borderData: FlBorderData(show: false),
-            lineTouchData: const LineTouchData(enabled: false),
-            titlesData: FlTitlesData(
-              topTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              rightTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: leftReserved,
-                  interval: maxY / 4,
-                  getTitlesWidget: (value, meta) => Text(
-                    value <= 0 ? '' : _formatAxisAmount(value.round()),
-                    maxLines: 1,
-                    softWrap: false,
-                    textAlign: TextAlign.right,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 240,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: LineChart(
+              LineChartData(
+                minY: 0,
+                maxY: maxY,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 4,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: theme.colorScheme.outlineVariant
+                        .withValues(alpha: 0.4),
+                    strokeWidth: 1,
                   ),
                 ),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: bottomReserved,
-                  getTitlesWidget: (value, meta) {
-                    final index = value.toInt();
-                    if (index < 0 || index >= points.length) {
-                      return const SizedBox.shrink();
+                borderData: FlBorderData(show: false),
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchCallback: (event, response) {
+                    final spot = response?.lineBarSpots?.firstOrNull;
+                    if (spot == null) return;
+                    final index = spot.x.round();
+                    if (index < 0 || index >= points.length) return;
+                    if (index != _selected) {
+                      setState(() => _selected = index);
                     }
-                    if (index % step != 0) return const SizedBox.shrink();
-                    final bucket = points[index].bucket;
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        compact && bucket.length >= 10
-                            ? bucket.substring(8)
-                            : formatBucketLabel(bucket),
+                  },
+                  touchTooltipData: LineTouchTooltipData(
+                    maxContentWidth: 220,
+                    tooltipPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    tooltipBorderRadius: BorderRadius.circular(10),
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipColor: (_) => theme.colorScheme.inverseSurface,
+                    getTooltipItems: (touchedSpots) => [
+                      for (final spot in touchedSpots)
+                        LineTooltipItem(
+                          '${formatBucketTitle(points[spot.x.toInt()].bucket)}\n'
+                          '${spot.barIndex == 0 ? '收入' : '支出'} '
+                          '¥${formatCents(spot.y.round())}',
+                          TextStyle(
+                            color: spot.barIndex == 0
+                                ? TrendLineChart.incomeColor
+                                : const Color(0xFFBBD9FF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                    ],
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: leftReserved,
+                      interval: maxY / 4,
+                      getTitlesWidget: (value, meta) => Text(
+                        value <= 0 ? '' : _formatAxisAmount(value.round()),
                         maxLines: 1,
                         softWrap: false,
+                        textAlign: TextAlign.right,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.outline,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: bottomReserved,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= points.length) {
+                          return const SizedBox.shrink();
+                        }
+                        if (index % step != 0) return const SizedBox.shrink();
+                        final bucket = points[index].bucket;
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            formatAxisBucketLabel(bucket, points.length),
+                            maxLines: 1,
+                            softWrap: false,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
+                lineBarsData: [
+                  _line(
+                    points,
+                    TrendLineChart.incomeColor,
+                    (point) => point.income,
+                  ),
+                  _line(
+                    points,
+                    TrendLineChart.expenseColor,
+                    (point) => point.expense,
+                  ),
+                ],
               ),
             ),
-            lineBarsData: [
-              _line(
-                points,
-                incomeColor,
-                (point) => point.income,
-              ),
-              _line(
-                points,
-                expenseColor,
-                (point) => point.expense,
-              ),
-            ],
           ),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 2),
+          child: Text(
+            _readoutText(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  String _readoutText() {
+    final index = _active;
+    if (index == null) return '点击图表可查看当天数值';
+    final point = widget.points[index];
+    return '${formatBucketTitle(point.bucket)} · '
+        '收入 ¥${formatCents(point.income)}'
+        ' · 支出 ¥${formatCents(point.expense)}';
   }
 
   LineChartBarData _line(
@@ -266,9 +358,12 @@ class TrendLineChart extends StatelessWidget {
     );
   }
 
-  /// Y 轴金额：万元以上用「万」，避免大字体下刻度换行。
+  /// Y 轴金额：万元以上用「万」、亿元以上用「亿」，避免大字体下刻度换行。
   String _formatAxisAmount(int cents) {
     final yuan = cents / 100;
+    if (yuan >= 100000000) {
+      return '¥${(yuan / 100000000).toStringAsFixed(1)}亿';
+    }
     if (yuan >= 10000) return '¥${(yuan / 10000).toStringAsFixed(1)}万';
     return '¥${formatCents(cents)}';
   }

@@ -308,7 +308,12 @@ class WeightTab extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                LineTrendChart(points: points, labelDivisor: 1000),
+                LineTrendChart(
+                  points: points,
+                  labelDivisor: 1000,
+                  tooltipValueFormatter: (value) =>
+                      '${(value / 1000).toStringAsFixed(2)} 千克',
+                ),
               ],
             ),
           ),
@@ -566,11 +571,15 @@ class _MeasureOverviewCard extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Text(
-            entry == null ? '—' : '${formatCm(entry!.mm)} cm',
-            maxLines: 1,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              entry == null ? '—' : '${formatCm(entry!.mm)} cm',
+              maxLines: 1,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(height: 2),

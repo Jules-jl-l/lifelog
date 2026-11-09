@@ -30,7 +30,7 @@ Color measurePartColor(String part) =>
     measurePartColors[part] ?? const Color(0xFF4E79F5);
 
 /// 多条围度折线：选中的部位高亮，其余半透明。
-class MeasureTrendChart extends StatelessWidget {
+class MeasureTrendChart extends StatefulWidget {
   const MeasureTrendChart({
     super.key,
     required this.series,
@@ -41,8 +41,18 @@ class MeasureTrendChart extends StatelessWidget {
   final String selectedPart;
 
   @override
+  State<MeasureTrendChart> createState() => _MeasureTrendChartState();
+}
+
+class _MeasureTrendChartState extends State<MeasureTrendChart> {
+  /// 点选后保持选中的桶下标。
+  int? _selected;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final series = widget.series;
+    final selectedPart = widget.selectedPart;
     final values = [
       for (final item in series)
         for (final point in item.points)
@@ -100,91 +110,183 @@ class MeasureTrendChart extends StatelessWidget {
       return painter.width;
     }
 
-    final topLabel = (maxValue / 10).toStringAsFixed(1);
-    final bottomLabel = (minValue / 10).toStringAsFixed(1);
-    final leftReserved = measureWidth(
-          topLabel.length >= bottomLabel.length ? topLabel : bottomLabel,
-        ) +
-        12;
+    final interval = (maxValue - minValue) / 4;
+    var leftReserved = 0.0;
+    for (final sample in [
+      minValue,
+      maxValue,
+      0.0,
+      minValue + interval,
+      maxValue - interval,
+    ]) {
+      final width = measureWidth((sample / 10).toStringAsFixed(1));
+      if (width > leftReserved) leftReserved = width;
+    }
+    leftReserved += 12;
 
-    return SizedBox(
-      height: 230,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: LineChart(
-          LineChartData(
-            minY: minValue,
-            maxY: maxValue,
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: (maxValue - minValue) / 4,
-              getDrawingHorizontalLine: (_) => FlLine(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
-                strokeWidth: 1,
-              ),
-            ),
-            borderData: FlBorderData(show: false),
-            lineTouchData: const LineTouchData(enabled: false),
-            titlesData: FlTitlesData(
-              topTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              rightTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: leftReserved,
-                  interval: (maxValue - minValue) / 4,
-                  getTitlesWidget: (value, meta) => Text(
-                    (value / 10).toStringAsFixed(1),
-                    maxLines: 1,
-                    softWrap: false,
-                    textAlign: TextAlign.right,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 230,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: LineChart(
+              LineChartData(
+                minY: minValue,
+                maxY: maxValue,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: interval,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color:
+                        theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    strokeWidth: 1,
                   ),
                 ),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 28,
-                  interval: 1,
-                  getTitlesWidget: (value, meta) {
-                    final index = value.toInt();
-                    if (index < 0 || index >= buckets.length) {
-                      return const SizedBox.shrink();
+                borderData: FlBorderData(show: false),
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchCallback: (event, response) {
+                    final spot = response?.lineBarSpots?.firstOrNull;
+                    if (spot == null) return;
+                    final index = spot.x.round();
+                    if (index < 0 || index >= buckets.length) return;
+                    if (index != _selected) {
+                      setState(() => _selected = index);
                     }
-                    if (!labelIndexes.contains(index)) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        formatBucketLabel(buckets[index].bucket),
+                  },
+                  touchTooltipData: LineTouchTooltipData(
+                    maxContentWidth: 220,
+                    tooltipPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    tooltipBorderRadius: BorderRadius.circular(10),
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipColor: (_) => theme.colorScheme.inverseSurface,
+                    getTooltipItems: (touchedSpots) {
+                      if (touchedSpots.isEmpty) return const [];
+                      final index = touchedSpots.first.x.round();
+                      final lines = <String>[
+                        if (index >= 0 && index < buckets.length)
+                          formatBucketTitle(buckets[index].bucket),
+                        for (final item in series)
+                          if (index >= 0 && index < item.points.length)
+                            if (item.points[index].value case final value?)
+                              '${item.part} ${(value / 10).toStringAsFixed(1)} 厘米',
+                      ];
+                      if (lines.isEmpty) return const [];
+                      // 同一天可能有多个部位，合并成一条提示，避免六行浮层互相遮挡
+                      return [
+                        LineTooltipItem(
+                          lines.join('\n'),
+                          TextStyle(
+                            color: theme.colorScheme.onInverseSurface,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        for (var i = 1; i < touchedSpots.length; i++) null,
+                      ];
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: leftReserved,
+                      interval: interval,
+                      getTitlesWidget: (value, meta) => Text(
+                        (value / 10).toStringAsFixed(1),
                         maxLines: 1,
                         softWrap: false,
+                        textAlign: TextAlign.right,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.outline,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= buckets.length) {
+                          return const SizedBox.shrink();
+                        }
+                        if (!labelIndexes.contains(index)) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            formatAxisBucketLabel(
+                              buckets[index].bucket,
+                              buckets.length,
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
+                lineBarsData: [
+                  for (final item in series)
+                    _lineFor(item, item.part == selectedPart),
+                ],
               ),
             ),
-            lineBarsData: [
-              for (final item in series)
-                _lineFor(item, item.part == selectedPart),
-            ],
           ),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 2),
+          child: Text(
+            _readoutText(buckets),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  String _readoutText(List<MetricPoint> buckets) {
+    final index = _selected;
+    if (index == null || index < 0 || index >= buckets.length) {
+      return '点击图表可查看当天各部位数值';
+    }
+    final values = <String>[
+      for (final item in widget.series)
+        if (index < item.points.length)
+          if (item.points[index].value case final value?)
+            '${item.part} ${(value / 10).toStringAsFixed(1)}',
+    ];
+    final date = formatBucketTitle(buckets[index].bucket);
+    if (values.isEmpty) return '$date · 无记录';
+    return '$date · ${values.join(' / ')} 厘米';
   }
 
   LineChartBarData _lineFor(MeasureSeries item, bool highlighted) {

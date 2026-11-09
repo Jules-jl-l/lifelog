@@ -234,9 +234,12 @@ class FinanceRepository {
   Stream<List<Transaction>> watchTransactions({
     TxnKind? kind,
     String? categoryId,
+    String? accountId,
     DateTime? from,
     DateTime? to,
     String? keyword,
+    String? payee,
+    String? note,
     int limit = 300,
   }) {
     final query = _db.select(_db.transactions)
@@ -250,6 +253,9 @@ class FinanceRepository {
     if (categoryId != null) {
       query.where((t) => t.categoryId.equals(categoryId));
     }
+    if (accountId != null) {
+      query.where((t) => t.accountId.equals(accountId));
+    }
     if (from != null) {
       query.where((t) => t.occurredAt.isBiggerOrEqualValue(from));
     }
@@ -261,6 +267,14 @@ class FinanceRepository {
       query.where(
         (t) => t.payee.like('%$trimmed%') | t.note.like('%$trimmed%'),
       );
+    }
+    final payeeText = payee?.trim();
+    if (payeeText != null && payeeText.isNotEmpty) {
+      query.where((t) => t.payee.like('%$payeeText%'));
+    }
+    final noteText = note?.trim();
+    if (noteText != null && noteText.isNotEmpty) {
+      query.where((t) => t.note.like('%$noteText%'));
     }
     return query.watch();
   }

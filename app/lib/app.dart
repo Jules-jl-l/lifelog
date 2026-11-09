@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/async_x.dart';
@@ -70,6 +71,14 @@ class _LifeLogAppState extends ConsumerState<LifeLogApp>
     return MaterialApp(
       title: '朝夕册',
       debugShowCheckedModeBanner: false,
+      // 固定简体中文，避免日期选择器、长按菜单等系统组件显示英文
+      locale: const Locale('zh', 'CN'),
+      supportedLocales: const [Locale('zh', 'CN')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       theme: buildAppTheme(Brightness.light, seed: accent.seed),
       darkTheme: buildAppTheme(Brightness.dark, seed: accent.seed),
       home: status.when(

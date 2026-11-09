@@ -165,10 +165,20 @@ class _FinancePageState extends ConsumerState<FinancePage> {
                       ?.copyWith(color: theme.colorScheme.outline),
                 ),
               ),
-              Text(
-                '${_period == ViewPeriod.year ? '月均' : '日均'} ¥${formatCents(average)}',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${_period == ViewPeriod.year ? '月均' : '日均'} ¥${formatCents(average)}',
+                      maxLines: 1,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.outline),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -380,10 +390,18 @@ class _RankingTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            '¥${formatCents(amount)}',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w600),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 132),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                '¥${formatCents(amount)}',
+                maxLines: 1,
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
         ],
       ),

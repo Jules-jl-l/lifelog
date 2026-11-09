@@ -60,8 +60,13 @@ class _AssetHistoryPageState extends ConsumerState<AssetHistoryPage> {
     );
     final options = periodOptions(_period, _now);
     final selected = _selectedPoint(points, options);
-    final chartPoints = [
+    // 历史趋势只保留有收支记录的周期：没有记录的月份 / 年份不进入图表与列表
+    final recorded = [
       for (final point in points)
+        if (point.changeCount > 0) point,
+    ];
+    final chartPoints = [
+      for (final point in recorded)
         MetricPoint(
           bucket: _bucketLabel(point.option.anchor),
           value: point.change / 100,
@@ -124,7 +129,14 @@ class _AssetHistoryPageState extends ConsumerState<AssetHistoryPage> {
                           ?.copyWith(color: theme.colorScheme.outline),
                     ),
                     const SizedBox(height: 8),
-                    LineTrendChart(points: chartPoints, decimals: 0),
+                    LineTrendChart(
+                      points: chartPoints,
+                      decimals: 0,
+                      yLabelFormatter: _formatChartAmount,
+                      tooltipValueFormatter: (value) =>
+                          '${value >= 0 ? '+' : '-'}'
+                          '¥${formatCents((value.abs() * 100).round())}',
+                    ),
                   ],
                 ),
               ),
@@ -134,12 +146,17 @@ class _AssetHistoryPageState extends ConsumerState<AssetHistoryPage> {
               margin: EdgeInsets.zero,
               child: Column(
                 children: [
-                  for (final point in points.reversed)
+                  for (final point in recorded.reversed)
                     _HistoryTile(
                       point: point,
                       selected: point.option.key == selected.option.key,
                       onTap: () =>
                           setState(() => _anchor = point.option.anchor),
+                    ),
+                  if (recorded.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Text('还没有收支记录，暂时没有历史变动'),
                     ),
                 ],
               ),
@@ -172,9 +189,11 @@ class _AssetHistoryPageState extends ConsumerState<AssetHistoryPage> {
     return points.last;
   }
 
-  String _bucketLabel(DateTime anchor) => _period == ViewPeriod.year
-      ? '${anchor.year}-${anchor.month.toString().padLeft(2, '0')}'
-      : formatDate(anchor);
+  String _bucketLabel(DateTime anchor) => switch (_period) {
+    ViewPeriod.week => formatDate(anchor),
+    ViewPeriod.month => monthKey(anchor),
+    ViewPeriod.year => '${anchor.year}',
+  };
 }
 
 class _ChangeCard extends StatelessWidget {
@@ -204,12 +223,16 @@ class _ChangeCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(
-                  '${point.option.label} · $previousLabel',
-                  style: theme.textTheme.labelLarge
-                      ?.copyWith(color: theme.colorScheme.outline),
+                Expanded(
+                  child: Text(
+                    '${point.option.label} · $previousLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 Text(
                   '${point.changeCount} 笔收支',
                   style: theme.textTheme.labelSmall
@@ -218,11 +241,16 @@ class _ChangeCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              _signedMoney(change),
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: color,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _signedMoney(change),
+                maxLines: 1,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -310,11 +338,19 @@ class _HistoryTile extends StatelessWidget {
         style: theme.textTheme.bodySmall
             ?.copyWith(color: theme.colorScheme.outline),
       ),
-      trailing: Text(
-        _signedMoney(change),
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
+      trailing: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 120),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(
+            _signedMoney(change),
+            maxLines: 1,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
       onTap: onTap,
@@ -325,4 +361,21 @@ class _HistoryTile extends StatelessWidget {
 String _signedMoney(int cents) {
   final sign = cents > 0 ? '+' : (cents < 0 ? '-' : '');
   return '$sign¥${formatCents(cents.abs())}';
+}
+
+/// 资产变动图表 Y 轴：大额用「万」/「亿」缩写，避免长数字挤压绘图区。
+String _formatChartAmount(double yuan) {
+  final abs = yuan.abs();
+  if (abs < 0.5) return '0';
+  if (abs >= 100000000) {
+    final yi = yuan / 100000000;
+    final digits = yi.abs() >= 100 ? 0 : 1;
+    return '${yi.toStringAsFixed(digits)}亿';
+  }
+  if (abs >= 10000) {
+    final wan = yuan / 10000;
+    final digits = wan.abs() >= 100 ? 0 : 1;
+    return '${wan.toStringAsFixed(digits)}万';
+  }
+  return yuan.toStringAsFixed(0);
 }

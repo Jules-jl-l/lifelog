@@ -270,16 +270,24 @@ class _BudgetsTabState extends ConsumerState<_BudgetsTab> {
                                   style: Theme.of(context).textTheme.titleSmall,
                                 ),
                               ),
-                              Text(
-                                '¥${formatCents(used)} / ¥${formatCents(budget.amount)}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline,
-                                    ),
+                              Flexible(
+                                flex: 3,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    '¥${formatCents(used)} / ¥${formatCents(budget.amount)}',
+                                    maxLines: 1,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline,
+                                        ),
+                                  ),
+                                ),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_outline),

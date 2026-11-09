@@ -66,6 +66,43 @@ String formatBucketLabel(String bucket) {
   return bucket;
 }
 
+/// 图表 X 轴标签（带桶数量）：单月 8~31 个桶时只显示「日」，避免日期标签挤在一起。
+String formatAxisBucketLabel(String bucket, int bucketCount) {
+  if (bucket.length >= 10 && bucketCount > 7 && bucketCount <= 31) {
+    return bucket.substring(8);
+  }
+  return formatBucketLabel(bucket);
+}
+
+/// 图表点选提示里的完整日期：日桶显示「2026年11月9日」，月桶显示「2026年11月」，
+/// 年桶显示「2026年」。
+String formatBucketTitle(String bucket) {
+  if (bucket.length >= 10) {
+    final year = int.tryParse(bucket.substring(0, 4));
+    final month = int.tryParse(bucket.substring(5, 7));
+    final day = int.tryParse(bucket.substring(8, 10));
+    if (year != null && month != null && day != null) {
+      return '$year年$month月$day日';
+    }
+  }
+  if (bucket.length == 7 && bucket[4] == '-') {
+    final year = int.tryParse(bucket.substring(0, 4));
+    final month = int.tryParse(bucket.substring(5));
+    if (year != null && month != null) return '$year年$month月';
+  }
+  if (bucket.length == 4) {
+    final year = int.tryParse(bucket);
+    if (year != null) return '$year年';
+  }
+  return bucket;
+}
+
+const _weekdayNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+/// 流水按日分组头：「11月9日 · 星期一」。
+String formatMonthDayWeekday(DateTime value) =>
+    '${value.month}月${value.day}日 · 星期${_weekdayNames[value.weekday - 1]}';
+
 DateTime startOfDay(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 

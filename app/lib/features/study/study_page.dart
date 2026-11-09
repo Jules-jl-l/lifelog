@@ -295,7 +295,12 @@ class _StudyPageState extends ConsumerState<StudyPage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  LineTrendChart(points: points, decimals: 0),
+                  LineTrendChart(
+                    points: points,
+                    decimals: 0,
+                    tooltipValueFormatter: (value) =>
+                        '${value.toStringAsFixed(0)} 分钟',
+                  ),
                 ],
               ),
             ),
@@ -972,7 +977,12 @@ class _StatsTabState extends ConsumerState<_StatsTab> {
               children: [
                 Text('学习量趋势', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
-                LineTrendChart(points: points, decimals: 0),
+                LineTrendChart(
+                  points: points,
+                  decimals: 0,
+                  tooltipValueFormatter: (value) =>
+                      '${value.toStringAsFixed(0)} 个词',
+                ),
               ],
             ),
           ),
