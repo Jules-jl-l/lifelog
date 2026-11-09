@@ -29,7 +29,7 @@
 
 | 版本 | 安装包 | 大小 | 说明 |
 |---|---|---|---|
-| **v0.5.0** | [lifelog-v0.5.0.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.5.0/lifelog-v0.5.0.apk) | 约 67 MB | 当前版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
+| **v0.5.0** | [lifelog-v0.5.0.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.5.0/lifelog-v0.5.0.apk) | 约 70 MB | 当前版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
 | **v0.4.1** | [lifelog-v0.4.1.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.4.1/lifelog-v0.4.1.apk) | 约 67 MB | 历史版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
 | **v0.4.0** | [lifelog-v0.4.0.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.4.0/lifelog-v0.4.0.apk) | 约 67 MB | 历史版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
 | **v0.3.1** | [lifelog-v0.3.1.apk](https://github.com/Jules-jl-l/lifelog/releases/download/v0.3.1/lifelog-v0.3.1.apk) | 约 67 MB | 历史版本，通用包（arm64-v8a / armeabi-v7a / x86_64） |
