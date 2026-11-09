@@ -38,7 +38,9 @@ part 'database.g.dart';
   AppSettings,
 ])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  /// [fileName] 对应一个数据空间的库文件，默认沿用历史版本的文件名。
+  AppDatabase({String fileName = 'lifelog.sqlite'})
+      : super(_openConnection(fileName));
 
   /// 测试用：注入内存数据库。
   AppDatabase.forTesting(super.executor);
@@ -91,8 +93,8 @@ class AppDatabase extends _$AppDatabase {
       );
 }
 
-LazyDatabase _openConnection() => LazyDatabase(() async {
+LazyDatabase _openConnection(String fileName) => LazyDatabase(() async {
       final dir = await getApplicationDocumentsDirectory();
-      final file = File(p.join(dir.path, 'lifelog.sqlite'));
+      final file = File(p.join(dir.path, fileName));
       return NativeDatabase.createInBackground(file);
     });

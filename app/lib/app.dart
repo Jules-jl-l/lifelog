@@ -67,6 +67,9 @@ class _LifeLogAppState extends ConsumerState<LifeLogApp>
     final status = ref.watch(lockStatusProvider);
     final accent =
         ref.watch(themeAccentProvider).dataOrNull ?? ThemeAccent.green;
+    // 切换数据空间时整棵主界面重建，避免残留上一个空间的周期、筛选等页面状态
+    final spaceId =
+        ref.watch(spaceControllerProvider.select((state) => state.currentId));
 
     return MaterialApp(
       title: '朝夕册',
@@ -84,7 +87,9 @@ class _LifeLogAppState extends ConsumerState<LifeLogApp>
       home: status.when(
         loading: () => const _Splash(),
         error: (error, _) => _Splash(message: '$error'),
-        data: (unlocked) => unlocked ? const HomeShell() : const LockPage(),
+        data: (unlocked) => unlocked
+            ? KeyedSubtree(key: ValueKey(spaceId), child: const HomeShell())
+            : const LockPage(),
       ),
     );
   }

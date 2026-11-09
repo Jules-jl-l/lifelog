@@ -15,6 +15,7 @@ import '../ai/api_key_sheet.dart';
 import '../ai/assistant_name_dialog.dart';
 import '../lock/lock_state.dart';
 import 'backup_page.dart';
+import 'data_spaces_page.dart';
 import 'export_page.dart';
 import 'recycle_bin_page.dart';
 import 'theme_color_sheet.dart';
@@ -89,6 +90,23 @@ class SettingsPage extends ConsumerWidget {
           ),
           const Divider(),
           const _SectionTitle('数据'),
+          Consumer(
+            builder: (context, ref, _) {
+              final state = ref.watch(spaceControllerProvider);
+              return ListTile(
+                leading: const Icon(Icons.folder_copy_outlined),
+                title: const Text('数据空间'),
+                subtitle: Text(
+                  '当前「${state.current.name}」· 共 ${state.spaces.length} 个空间',
+                ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DataSpacesPage(),
+                  ),
+                ),
+              );
+            },
+          ),
           Consumer(
             builder: (context, ref, _) {
               final lastBackup = ref.watch(lastBackupAtProvider).dataOrNull;
@@ -175,7 +193,7 @@ class SettingsPage extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              '朝夕册 v0.5.0 · 数据只有本机一份，请定期导出备份。',
+              '朝夕册 v0.6.0 · 数据只有本机一份，请定期导出备份。',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.outline),
             ),

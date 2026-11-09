@@ -106,9 +106,20 @@ class CategoryPieChart extends StatelessWidget {
 }
 
 class TrendLineChart extends StatefulWidget {
-  const TrendLineChart({super.key, required this.points});
+  const TrendLineChart({
+    super.key,
+    required this.points,
+    this.average,
+    this.averageColor,
+  });
 
   final List<TrendPoint> points;
+
+  /// 平均值的虚线位置（单位：分）；为空或 0 时不画虚线。
+  final int? average;
+
+  /// 虚线颜色。
+  final Color? averageColor;
 
   static const incomeColor = Color(0xFF0FDC78);
   static const expenseColor = Color(0xFF80C1FF);
@@ -156,6 +167,13 @@ class _TrendLineChartState extends State<TrendLineChart> {
       if (point.expense > maxValue) maxValue = point.expense;
     }
     final maxY = maxValue == 0 ? 100.0 : maxValue * 1.2;
+
+    final bars = [
+      _line(points, TrendLineChart.incomeColor, (point) => point.income),
+      _line(points, TrendLineChart.expenseColor, (point) => point.expense),
+    ];
+    final active = _active;
+    final average = widget.average;
 
     // 一周只有 7 个点，直接显示日号；更长的周期最多 6 个日期标签，
     // 避免小屏或大字体下互相重叠。
@@ -211,8 +229,34 @@ class _TrendLineChartState extends State<TrendLineChart> {
                   ),
                 ),
                 borderData: FlBorderData(show: false),
+                // 平均值虚线：常驻显示，方便与各天数值直观对比。
+                extraLinesData: average == null || average <= 0
+                    ? const ExtraLinesData()
+                    : ExtraLinesData(
+                        horizontalLines: [
+                          HorizontalLine(
+                            y: average.toDouble(),
+                            color: (widget.averageColor ??
+                                    theme.colorScheme.outline)
+                                .withValues(alpha: 0.8),
+                            strokeWidth: 1.4,
+                            dashArray: const [6, 4],
+                          ),
+                        ],
+                      ),
+                // 由外部维护浮层：松开手指后仍保留，直到切换页面或周期。
+                showingTooltipIndicators: active == null
+                    ? const []
+                    : [
+                        ShowingTooltipIndicators([
+                          for (var i = 0; i < bars.length; i++)
+                            LineBarSpot(bars[i], i, bars[i].spots[active]),
+                        ]),
+                      ],
                 lineTouchData: LineTouchData(
                   enabled: true,
+                  // 关闭内置触摸浮层，否则抬手时会被清空。
+                  handleBuiltInTouches: false,
                   touchCallback: (event, response) {
                     final spot = response?.lineBarSpots?.firstOrNull;
                     if (spot == null) return;
@@ -299,18 +343,7 @@ class _TrendLineChartState extends State<TrendLineChart> {
                     ),
                   ),
                 ),
-                lineBarsData: [
-                  _line(
-                    points,
-                    TrendLineChart.incomeColor,
-                    (point) => point.income,
-                  ),
-                  _line(
-                    points,
-                    TrendLineChart.expenseColor,
-                    (point) => point.expense,
-                  ),
-                ],
+                lineBarsData: bars,
               ),
             ),
           ),

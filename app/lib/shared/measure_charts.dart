@@ -124,6 +124,26 @@ class _MeasureTrendChartState extends State<MeasureTrendChart> {
     }
     leftReserved += 12;
 
+    final bars = [
+      for (final item in series) _lineFor(item, item.part == selectedPart),
+    ];
+    // 当天有记录的部位才放进常驻浮层，没有记录的部位不显示。
+    final active = _selected;
+    final tooltipSpots = <LineBarSpot>[];
+    if (active != null && active >= 0 && active < buckets.length) {
+      for (var i = 0; i < series.length; i++) {
+        final value = active < series[i].points.length
+            ? series[i].points[active].value
+            : null;
+        if (value == null) continue;
+        final spot = bars[i].spots
+            .where((item) => item.x == active.toDouble())
+            .firstOrNull;
+        if (spot == null) continue;
+        tooltipSpots.add(LineBarSpot(bars[i], i, spot));
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -146,8 +166,14 @@ class _MeasureTrendChartState extends State<MeasureTrendChart> {
                   ),
                 ),
                 borderData: FlBorderData(show: false),
+                // 由外部维护浮层：松开手指后仍保留，直到切换页面或周期。
+                showingTooltipIndicators: tooltipSpots.isEmpty
+                    ? const []
+                    : [ShowingTooltipIndicators(tooltipSpots)],
                 lineTouchData: LineTouchData(
                   enabled: true,
+                  // 关闭内置触摸浮层，否则抬手时会被清空。
+                  handleBuiltInTouches: false,
                   touchCallback: (event, response) {
                     final spot = response?.lineBarSpots?.firstOrNull;
                     if (spot == null) return;
@@ -248,10 +274,7 @@ class _MeasureTrendChartState extends State<MeasureTrendChart> {
                     ),
                   ),
                 ),
-                lineBarsData: [
-                  for (final item in series)
-                    _lineFor(item, item.part == selectedPart),
-                ],
+                lineBarsData: bars,
               ),
             ),
           ),

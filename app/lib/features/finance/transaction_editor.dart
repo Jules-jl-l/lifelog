@@ -264,10 +264,10 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
             const SizedBox(height: 20),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.schedule),
-              title: const Text('时间'),
-              subtitle: Text(formatDateTime(_occurredAt)),
-              onTap: _pickDateTime,
+              leading: const Icon(Icons.calendar_today_outlined),
+              title: const Text('日期'),
+              subtitle: Text(formatDate(_occurredAt)),
+              onTap: _pickDate,
             ),
             TextField(
               controller: _payee,
@@ -310,7 +310,7 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
     );
   }
 
-  Future<void> _pickDateTime() async {
+  Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
       initialDate: _occurredAt,
@@ -319,19 +319,13 @@ class _TransactionEditorState extends ConsumerState<TransactionEditor> {
     );
     if (date == null || !mounted) return;
 
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_occurredAt),
-    );
-    if (!mounted) return;
-
     setState(() {
       _occurredAt = DateTime(
         date.year,
         date.month,
         date.day,
-        time?.hour ?? _occurredAt.hour,
-        time?.minute ?? _occurredAt.minute,
+        _occurredAt.hour,
+        _occurredAt.minute,
       );
     });
   }

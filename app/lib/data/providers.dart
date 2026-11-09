@@ -13,11 +13,18 @@ import 'health_repository.dart';
 import 'recycle_bin_repository.dart';
 import 'security_store.dart';
 import 'settings_repository.dart';
+import 'spaces/space_store.dart';
 import 'study/builtin_wordbooks.dart';
 import 'study_repository.dart';
 
+export 'spaces/space_store.dart';
+
+/// 当前数据空间对应的数据库；切换空间时整体重建，旧库自动关闭。
 final databaseProvider = Provider<AppDatabase>((ref) {
-  final database = AppDatabase();
+  final fileName = ref.watch(
+    spaceControllerProvider.select((state) => state.current.fileName),
+  );
+  final database = AppDatabase(fileName: fileName);
   ref.onDispose(database.close);
   return database;
 });

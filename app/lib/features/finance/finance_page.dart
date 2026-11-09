@@ -17,6 +17,10 @@ import 'manage_page.dart';
 import 'transaction_editor.dart';
 import 'transactions_page.dart';
 
+/// 平均值虚线配色：比折线略深，虚线本身即可区分。
+const _incomeAverageColor = Color(0xFF05994F);
+const _expenseAverageColor = Color(0xFFE8463A);
+
 class FinancePage extends ConsumerStatefulWidget {
   const FinancePage({super.key});
 
@@ -201,21 +205,44 @@ class _FinancePageState extends ConsumerState<FinancePage> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: const [
-                      _LegendDot(
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const _LegendDot(
                         color: TrendLineChart.incomeColor,
                         label: '收入',
                       ),
-                      SizedBox(width: 16),
-                      _LegendDot(
+                      const _LegendDot(
                         color: TrendLineChart.expenseColor,
                         label: '支出',
                       ),
+                      if (average > 0)
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 180),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: _LegendDot(
+                              color: _kind == TxnKind.expense
+                                  ? _expenseAverageColor
+                                  : _incomeAverageColor,
+                              label: _averageLegend(average),
+                              dashed: true,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  TrendLineChart(points: points),
+                  TrendLineChart(
+                    points: points,
+                    average: average,
+                    averageColor: _kind == TxnKind.expense
+                        ? _expenseAverageColor
+                        : _incomeAverageColor,
+                  ),
                 ],
               ),
             ),
@@ -303,6 +330,13 @@ class _FinancePageState extends ConsumerState<FinancePage> {
         ],
       ),
     );
+  }
+
+  /// 图例里的平均值文案，如「日均支出 ¥1,234.56」。
+  String _averageLegend(int average) {
+    final label = '${_period == ViewPeriod.year ? '月均' : '日均'}'
+        '${_kind == TxnKind.expense ? '支出' : '收入'}';
+    return '$label ¥${formatCents(average)}';
   }
 
   String _selectedPeriodKey(List<PeriodOption> options) {
@@ -493,21 +527,41 @@ class _StatCard extends StatelessWidget {
 }
 
 class _LegendDot extends StatelessWidget {
-  const _LegendDot({required this.color, required this.label});
+  const _LegendDot({
+    required this.color,
+    required this.label,
+    this.dashed = false,
+  });
 
   final Color color;
   final String label;
+
+  /// 为 true 时画一小段虚线段，用于「平均值」这类参考线。
+  final bool dashed;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
+        if (dashed)
+          SizedBox(
+            width: 14,
+            height: 2,
+            child: Row(
+              children: [
+                Expanded(child: Container(height: 2, color: color)),
+                const SizedBox(width: 3),
+                Expanded(child: Container(height: 2, color: color)),
+              ],
+            ),
+          )
+        else
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
         const SizedBox(width: 6),
         Text(label, style: Theme.of(context).textTheme.labelSmall),
       ],

@@ -136,6 +136,23 @@ class _LineTrendChartState extends State<LineTrendChart> {
     )..layout();
     final bottomReserved = bottomPainter.height + 8;
 
+    final bar = LineChartBarData(
+      spots: spots,
+      isCurved: false,
+      color: brand,
+      barWidth: 2,
+      dotData: FlDotData(show: spots.length <= 40),
+      belowBarData: BarAreaData(
+        show: true,
+        color: brand.withValues(alpha: 0.12),
+      ),
+    );
+    // 只在该桶有数据时显示浮层；空白桶不显示。
+    final active = _active;
+    final activeSpot = active == null
+        ? null
+        : spots.where((spot) => spot.x == active.toDouble()).firstOrNull;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -158,8 +175,18 @@ class _LineTrendChartState extends State<LineTrendChart> {
                   ),
                 ),
                 borderData: FlBorderData(show: false),
+                // 由外部维护浮层：松开手指后仍保留，直到切换页面或周期。
+                showingTooltipIndicators: activeSpot == null
+                    ? const []
+                    : [
+                        ShowingTooltipIndicators([
+                          LineBarSpot(bar, 0, activeSpot),
+                        ]),
+                      ],
                 lineTouchData: LineTouchData(
                   enabled: true,
+                  // 关闭内置触摸浮层，否则抬手时会被清空。
+                  handleBuiltInTouches: false,
                   touchCallback: (event, response) {
                     final spot = response?.lineBarSpots?.firstOrNull;
                     if (spot == null) return;
@@ -256,19 +283,7 @@ class _LineTrendChartState extends State<LineTrendChart> {
                     ),
                   ),
                 ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: false,
-                    color: brand,
-                    barWidth: 2,
-                    dotData: FlDotData(show: spots.length <= 40),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: brand.withValues(alpha: 0.12),
-                    ),
-                  ),
-                ],
+                lineBarsData: [bar],
               ),
             ),
           ),
